@@ -12,15 +12,17 @@
     "test": "vitest run",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "db:migrate": "node -e \"console.error('db:migrate is implemented in T1.2'); process.exit(1)\"",
-    "db:check": "node -e \"console.error('db:check is implemented in T1.2'); process.exit(1)\"",
+    "db:migrate": "node src/db/cli.js migrate",
+    "db:check": "node src/db/cli.js check",
     "config:check": "node -e \"console.error('config:check is implemented in T1.3'); process.exit(1)\"",
     "ai:ping": "node -e \"console.error('ai:ping is implemented in T3.5'); process.exit(1)\"",
     "parser:check": "node -e \"console.error('parser:check is implemented in T1.6'); process.exit(1)\""
   },
   "dependencies": {
     "dotenv": "^18.0.10",
-    "express": "^5.3.0"
+    "express": "^5.3.0",
+    "express-validator": "^7.3.2",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
