@@ -43,11 +43,12 @@ Graph Code turns a public GitHub repository into an interactive dependency graph
 - Parameterized SQL only; every query scoped to the signed-in user; another user's data returns 404.
 - GitHub requests only to `github.com`, `api.github.com`, `codeload.github.com`.
 - Repository code is parsed, never executed, never stored.
-- No secrets in code, logs, chat or git. Never read `.env` files (denied in `.claude/settings.json`).
+- No secrets in code, logs, chat or git. Never read any `.env` file. `.claude/settings.json` only denies `server/.env` and `client/.env.production`, so `_prototype/.env` is protected by this rule alone.
 - No `dangerouslySetInnerHTML`.
-- Only `.env.example` (empty values) is committed.
+- Only `.env.example` is committed, with no real values.
 
 ## Fixed decisions to remember
+- Branches are `solo/<task>-<slug>` (spec 0.1 shows `inc1/t1.3-auth`; solo adaptation).
 - Node 26 (deviation from spec's `.nvmrc` 22; user decision 10 Nov 2026).
 - D-04: follow the spec everywhere. UUID node ids, real nested folder nodes, edges importer -> imported, drawn unreversed.
 - One test repository: `Darkness947/vigilante-resume-tailor` (63 files); report per-100-file timing.

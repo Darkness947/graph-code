@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { createServer } from '../../src/server.js';
+import { createServer } from '../../src/app.js';
 
 describe('server skeleton', () => {
   it('builds an Express app that answers requests', async () => {
