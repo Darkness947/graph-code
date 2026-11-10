@@ -7,5 +7,10 @@ import pg from 'pg';
  * @returns {import('pg').Pool}
  */
 export function createPool(connectionString) {
-  return new pg.Pool({ connectionString, max: 5 });
+  const pool = new pg.Pool({ connectionString, max: 5 });
+  // Neon drops idle connections; an unhandled 'error' event would crash the process.
+  pool.on('error', (err) => {
+    console.error('Idle database client error:', err.message);
+  });
+  return pool;
 }

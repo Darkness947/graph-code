@@ -47,7 +47,7 @@ describe('encodeSegment', () => {
   });
 
   it('only produces valid ltree label characters', () => {
-    for (const s of ['[id]', 'a b', 'ünï', '@x/y'.replace('/', ''), 'x.y-z']) {
+    for (const s of ['[id]', 'a b', 'ünï', '@x', 'x.y-z']) {
       expect(encodeSegment(s)).toMatch(/^[A-Za-z0-9_]+$/);
     }
   });
