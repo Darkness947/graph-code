@@ -1,4 +1,10 @@
-/** Placeholder shell. Routes, tokens and pages are added in T1.5. */
+import { BrowserRouter } from 'react-router-dom';
+import AppRoutes from './routes.jsx';
+
 export default function App() {
-  return <main>Graph Code</main>;
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
 }
