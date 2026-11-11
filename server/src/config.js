@@ -26,7 +26,8 @@ const INT_DEFAULTS = {
 
 /**
  * Variables that become required in a later task, once the human has created the external
- * resource (S-03 in T1.4, S-04 in T3.5). Until then they are format-checked only if present.
+ * resource (S-03 in T1.4, S-04 in T3.5). Until then they may be absent; when present they
+ * are accepted as given (these credentials have no fixed format to check).
  */
 export const LATER_REQUIRED = Object.freeze({
   GITHUB_CLIENT_ID: 'T1.4',
@@ -107,7 +108,10 @@ export function loadConfig(env = process.env) {
     bad('NODE_ENV', `must be one of ${ENVIRONMENTS.join(', ')}`);
   } else cfg.NODE_ENV = env.NODE_ENV.trim();
   int('PORT', 3000, 1);
+  if (cfg.PORT > 65535) bad('PORT', 'must be at most 65535');
   required('APP_ORIGIN', httpUrl);
+  // Browsers send the bare origin (no path, no trailing slash); CORS compares exactly.
+  if (cfg.APP_ORIGIN) cfg.APP_ORIGIN = new URL(cfg.APP_ORIGIN).origin;
   int('TRUST_PROXY_HOPS', 1, 0);
 
   // Database

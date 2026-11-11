@@ -8,6 +8,7 @@ import { attachRequestId } from '../../src/middleware/security.js';
 import { validateRequest, uuidParam, repoInputBody } from '../../src/middleware/validate.js';
 import { AppError } from '../../src/errors/AppError.js';
 import { ERROR_STATUS } from '../../src/errors/codes.js';
+import { rateLimitKey, GLOBAL_LIMIT } from '../../src/middleware/rateLimits.js';
 
 const config = {
   NODE_ENV: 'test',
@@ -94,6 +95,41 @@ describe('security middleware', () => {
   });
 });
 
+describe('rate limiting', () => {
+  it('is 300 requests per 15 minutes on /api (spec 7.1)', () => {
+    expect(GLOBAL_LIMIT).toEqual({ windowMs: 15 * 60 * 1000, limit: 300 });
+  });
+
+  it('keys by user ID when signed in, otherwise by IP', () => {
+    expect(rateLimitKey({ session: { userId: 'u-1' }, ip: '1.2.3.4' })).toBe('user:u-1');
+    expect(rateLimitKey({ session: {}, ip: '1.2.3.4' })).toBe('ip:1.2.3.4');
+    expect(rateLimitKey({ ip: '1.2.3.4' })).toBe('ip:1.2.3.4');
+    expect(rateLimitKey({ ip: '5.6.7.8' })).not.toBe(rateLimitKey({ ip: '1.2.3.4' }));
+  });
+
+  it('groups IPv6 addresses of one /64 subnet together', () => {
+    expect(rateLimitKey({ ip: '2001:db8:1:2:aaaa::1' })).toBe(
+      rateLimitKey({ ip: '2001:db8:1:2:bbbb::9' }),
+    );
+  });
+
+  it('counts each client IP separately', async () => {
+    const app = createApp(
+      { ...config, TRUST_PROXY_HOPS: 1 },
+      { globalLimit: { windowMs: 60_000, limit: 1 } },
+    );
+    expect((await request(app).get('/api/health').set('X-Forwarded-For', '9.9.9.1')).status).toBe(
+      200,
+    );
+    expect((await request(app).get('/api/health').set('X-Forwarded-For', '9.9.9.1')).status).toBe(
+      429,
+    );
+    expect((await request(app).get('/api/health').set('X-Forwarded-For', '9.9.9.2')).status).toBe(
+      200,
+    );
+  });
+});
+
 describe('central error handler', () => {
   function appThatThrows(error, cfg = config) {
     const app = express();
@@ -134,6 +170,52 @@ describe('central error handler', () => {
     expect(spy).toHaveBeenCalledOnce();
     expect(spy.mock.calls[0][0]).toContain(res.body.error.requestId);
     expect(spy.mock.calls[0][0]).toContain('disk on fire');
+  });
+
+  it('in production logs only the error name and code, never message or stack', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const err = Object.assign(new Error('connect postgres://u:SECRETPW@host/db failed'), {
+      code: 'ECONNREFUSED',
+    });
+    const res = await request(appThatThrows(err, { NODE_ENV: 'production' })).get('/boom');
+    expect(res.status).toBe(500);
+    const logged = spy.mock.calls[0][0];
+    expect(logged).toContain('ECONNREFUSED');
+    expect(logged).not.toContain('SECRETPW');
+    expect(logged).not.toContain('postgres:');
+    expect(logged).not.toContain('    at ');
+  });
+
+  it('maps other body-parser client errors (4xx, exposed) to VALIDATION_ERROR', async () => {
+    const err = Object.assign(new Error('unsupported charset "UTF-7"'), {
+      status: 415,
+      type: 'charset.unsupported',
+      expose: true,
+    });
+    const res = await request(appThatThrows(err)).get('/boom');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(JSON.stringify(res.body)).not.toContain('UTF-7');
+  });
+
+  it('does not treat a non-exposed 4xx or a 5xx error as a client error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    for (const err of [
+      Object.assign(new Error('x'), { status: 404 }),
+      Object.assign(new Error('x'), { status: 503, expose: true }),
+    ]) {
+      const res = await request(appThatThrows(err)).get('/boom');
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL');
+    }
+  });
+
+  it('does not let extras overwrite code, message or requestId', async () => {
+    const err = new AppError('JOB_ACTIVE', 'msg', { code: 'HACKED', message: 'x', requestId: 'y' });
+    const res = await request(appThatThrows(err)).get('/boom');
+    expect(res.body.error.code).toBe('JOB_ACTIVE');
+    expect(res.body.error.message).toBe('msg');
+    expect(res.body.error.requestId).not.toBe('y');
   });
 
   it('every Part 6.1 code is constructible with its status', () => {

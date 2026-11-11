@@ -119,6 +119,18 @@ describe('loadConfig', () => {
     }
   });
 
+  it('normalises APP_ORIGIN to a bare origin so CORS compares equal', () => {
+    for (const v of ['https://x.app/', 'https://x.app/some/path', 'https://x.app']) {
+      expect(loadConfig({ ...validEnv(), APP_ORIGIN: v }).APP_ORIGIN).toBe('https://x.app');
+    }
+  });
+
+  it('rejects a PORT above 65535', () => {
+    expect(problemsOf({ ...validEnv(), PORT: '70000' }).problems.map((p) => p.name)).toContain(
+      'PORT',
+    );
+  });
+
   it('never includes a variable value in an error message', () => {
     const secrets = {
       DATABASE_URL: 'mysql://leaky-user:leaky-pass@host/db',
