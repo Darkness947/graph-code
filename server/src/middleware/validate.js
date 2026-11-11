@@ -1,4 +1,5 @@
-import { body, param } from 'express-validator';
+import { body, param, validationResult } from 'express-validator';
+import { AppError } from '../errors/AppError.js';
 
 /** GitHub owner: letters, digits and hyphens, at most 39 characters (spec 7.1). */
 export const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -58,3 +59,20 @@ export const repoInputBody = () =>
   body('repo')
     .custom((value) => parseRepoInput(value) !== null)
     .withMessage('repo must be owner/name or a https://github.com/owner/name URL');
+
+/**
+ * Runs after the express-validator chains. Turns failures into VALIDATION_ERROR (spec 6.1),
+ * listing the failing fields. Submitted values are never echoed back.
+ * @type {import('express').RequestHandler}
+ */
+export function validateRequest(req, res, next) {
+  const result = validationResult(req);
+  if (result.isEmpty()) return next();
+  const details = result.array().map((e) => ({
+    field: e.type === 'field' ? e.path : e.type,
+    message: String(e.msg),
+  }));
+  next(
+    new AppError('VALIDATION_ERROR', 'Some of the information provided is not valid.', { details }),
+  );
+}
