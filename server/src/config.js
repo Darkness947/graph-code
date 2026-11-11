@@ -135,7 +135,15 @@ export function loadConfig(env = process.env) {
   } else if (isBlank(env.GITHUB_CALLBACK_URL)) {
     cfg.GITHUB_CALLBACK_URL = 'http://localhost:5173/api/auth/github/callback';
   } else {
-    const problem = httpUrl(String(env.GITHUB_CALLBACK_URL).trim());
+    const raw = String(env.GITHUB_CALLBACK_URL).trim();
+    // Production cookies are Secure and the code and state travel in this URL, so plain HTTP
+    // would break the session check and expose OAuth data.
+    const problem =
+      cfg.NODE_ENV === 'production'
+        ? isUrl(raw, ['https:'])
+          ? null
+          : 'must be a valid https URL in production'
+        : httpUrl(raw);
     if (problem) bad('GITHUB_CALLBACK_URL', problem);
     else cfg.GITHUB_CALLBACK_URL = String(env.GITHUB_CALLBACK_URL).trim();
   }

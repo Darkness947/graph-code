@@ -131,6 +131,15 @@ describe('loadConfig', () => {
     ).toBeTruthy();
   });
 
+  it('rejects a non-https GITHUB_CALLBACK_URL in production but allows it in development', () => {
+    const prod = { ...validEnv(), NODE_ENV: 'production' };
+    const http = 'http://x.app/api/auth/github/callback';
+    expect(
+      problemsOf({ ...prod, GITHUB_CALLBACK_URL: http }).problems.map((p) => p.name),
+    ).toContain('GITHUB_CALLBACK_URL');
+    expect(loadConfig({ ...validEnv(), GITHUB_CALLBACK_URL: http }).GITHUB_CALLBACK_URL).toBe(http);
+  });
+
   it('normalises APP_ORIGIN to a bare origin so CORS compares equal', () => {
     for (const v of ['https://x.app/', 'https://x.app/some/path', 'https://x.app']) {
       expect(loadConfig({ ...validEnv(), APP_ORIGIN: v }).APP_ORIGIN).toBe('https://x.app');

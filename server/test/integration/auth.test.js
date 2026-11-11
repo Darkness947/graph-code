@@ -174,6 +174,8 @@ describe.skipIf(!hasTestDb)('auth (integration, test database)', () => {
       .set('Cookie', cookie);
     expect(res.headers.location).toBe('/error?code=oauth_failed');
     expect((await pool.query('SELECT count(*)::int AS n FROM users')).rows[0].n).toBe(before);
+    expect(await sessionRows(cookie)).toBe(0);
+    expect(clearsCookie(res)).toBe(true);
   });
 
   it('a callback replayed with the old cookie after sign-in is rejected', async () => {
