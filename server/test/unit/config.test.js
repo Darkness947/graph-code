@@ -8,6 +8,8 @@ const validEnv = () => ({
   DATABASE_URL: 'postgresql://user:dbpass@ep-abc.example.neon.tech/neondb?sslmode=require',
   SESSION_SECRET: randomBytes(32).toString('hex'),
   TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+  GITHUB_CLIENT_ID: 'Iv1.testclientid',
+  GITHUB_CLIENT_SECRET: 'test-client-secret',
 });
 
 function problemsOf(env) {
@@ -63,13 +65,15 @@ describe('loadConfig', () => {
         'DATABASE_URL',
         'SESSION_SECRET',
         'TOKEN_ENCRYPTION_KEY',
+        'GITHUB_CLIENT_ID',
+        'GITHUB_CLIENT_SECRET',
       ]),
     );
   });
 
-  it('does not require GitHub or Gemini credentials yet', () => {
+  it('requires GitHub credentials but not the Gemini key yet', () => {
     const cfg = loadConfig(validEnv());
-    expect(cfg.GITHUB_CLIENT_ID).toBeUndefined();
+    expect(cfg.GITHUB_CLIENT_ID).toBe('Iv1.testclientid');
     expect(cfg.GEMINI_API_KEY).toBeUndefined();
   });
 
@@ -119,6 +123,23 @@ describe('loadConfig', () => {
     }
   });
 
+  it('requires GITHUB_CALLBACK_URL in production only', () => {
+    const prod = { ...validEnv(), NODE_ENV: 'production' };
+    expect(problemsOf(prod).problems.map((p) => p.name)).toContain('GITHUB_CALLBACK_URL');
+    expect(
+      loadConfig({ ...prod, GITHUB_CALLBACK_URL: 'https://x.app/api/auth/github/callback' }),
+    ).toBeTruthy();
+  });
+
+  it('rejects a non-https GITHUB_CALLBACK_URL in production but allows it in development', () => {
+    const prod = { ...validEnv(), NODE_ENV: 'production' };
+    const http = 'http://x.app/api/auth/github/callback';
+    expect(
+      problemsOf({ ...prod, GITHUB_CALLBACK_URL: http }).problems.map((p) => p.name),
+    ).toContain('GITHUB_CALLBACK_URL');
+    expect(loadConfig({ ...validEnv(), GITHUB_CALLBACK_URL: http }).GITHUB_CALLBACK_URL).toBe(http);
+  });
+
   it('normalises APP_ORIGIN to a bare origin so CORS compares equal', () => {
     for (const v of ['https://x.app/', 'https://x.app/some/path', 'https://x.app']) {
       expect(loadConfig({ ...validEnv(), APP_ORIGIN: v }).APP_ORIGIN).toBe('https://x.app');
@@ -152,7 +173,7 @@ describe('describeConfig', () => {
     const rows = describeConfig(env);
     const byName = Object.fromEntries(rows.map((r) => [r.name, r]));
     expect(byName.SESSION_SECRET.status).toBe('ok');
-    expect(byName.GITHUB_CLIENT_ID.status).toBe('not yet required');
+    expect(byName.GITHUB_CLIENT_ID.status).toBe('ok');
     expect(byName.GEMINI_API_KEY.status).toBe('not yet required');
     const text = JSON.stringify(rows);
     expect(text).not.toContain(env.SESSION_SECRET);

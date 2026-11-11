@@ -1,6 +1,7 @@
 import process from 'node:process';
 import { loadConfig, ConfigError } from './config.js';
 import { createApp } from './app.js';
+import { createPool } from './db/pool.js';
 
 if (process.env.NODE_ENV !== 'production') {
   const { config: loadDotenv } = await import('dotenv');
@@ -18,6 +19,7 @@ try {
   throw err;
 }
 
-createApp(config).listen(config.PORT, () => {
+const pool = createPool(config.DATABASE_URL);
+createApp(config, { pool }).listen(config.PORT, () => {
   console.log(`Graph Code server listening on port ${config.PORT}`);
 });

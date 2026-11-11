@@ -26,12 +26,10 @@ const INT_DEFAULTS = {
 
 /**
  * Variables that become required in a later task, once the human has created the external
- * resource (S-03 in T1.4, S-04 in T3.5). Until then they may be absent; when present they
+ * resource (S-04 in T3.5). Until then they may be absent; when present they
  * are accepted as given (these credentials have no fixed format to check).
  */
 export const LATER_REQUIRED = Object.freeze({
-  GITHUB_CLIENT_ID: 'T1.4',
-  GITHUB_CLIENT_SECRET: 'T1.4',
   GEMINI_API_KEY: 'T3.5',
 });
 
@@ -129,13 +127,23 @@ export function loadConfig(env = process.env) {
   );
   int('TOKEN_KEY_ID', 1, 1);
 
-  // GitHub OAuth (required from T1.4)
-  optional('GITHUB_CLIENT_ID', () => null);
-  optional('GITHUB_CLIENT_SECRET', () => null);
-  if (isBlank(env.GITHUB_CALLBACK_URL)) {
+  // GitHub OAuth (S-03)
+  required('GITHUB_CLIENT_ID');
+  required('GITHUB_CLIENT_SECRET');
+  if (isBlank(env.GITHUB_CALLBACK_URL) && cfg.NODE_ENV === 'production') {
+    bad('GITHUB_CALLBACK_URL', 'is required in production');
+  } else if (isBlank(env.GITHUB_CALLBACK_URL)) {
     cfg.GITHUB_CALLBACK_URL = 'http://localhost:5173/api/auth/github/callback';
   } else {
-    const problem = httpUrl(String(env.GITHUB_CALLBACK_URL).trim());
+    const raw = String(env.GITHUB_CALLBACK_URL).trim();
+    // Production cookies are Secure and the code and state travel in this URL, so plain HTTP
+    // would break the session check and expose OAuth data.
+    const problem =
+      cfg.NODE_ENV === 'production'
+        ? isUrl(raw, ['https:'])
+          ? null
+          : 'must be a valid https URL in production'
+        : httpUrl(raw);
     if (problem) bad('GITHUB_CALLBACK_URL', problem);
     else cfg.GITHUB_CALLBACK_URL = String(env.GITHUB_CALLBACK_URL).trim();
   }

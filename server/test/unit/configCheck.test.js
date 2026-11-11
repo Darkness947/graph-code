@@ -17,6 +17,8 @@ const CONFIG_VARS = [
   'SESSION_SECRET',
   'TOKEN_ENCRYPTION_KEY',
   'TOKEN_KEY_ID',
+  'GITHUB_CLIENT_ID',
+  'GITHUB_CLIENT_SECRET',
 ];
 
 let dir;
@@ -43,6 +45,8 @@ beforeAll(() => {
       'DATABASE_URL=postgresql://u:fixturepw@ep-x.example.neon.tech/neondb',
       `SESSION_SECRET=${goodSecret}`,
       `TOKEN_ENCRYPTION_KEY=${goodKey}`,
+      'GITHUB_CLIENT_ID=fixtureid',
+      'GITHUB_CLIENT_SECRET=fixturesecret',
     ].join('\n'),
   );
 });
