@@ -36,6 +36,12 @@ describe.skipIf(!hasTestDb)('auth (integration, test database)', () => {
   const cookieOf = (res) =>
     (res.headers['set-cookie'] ?? []).find((c) => c.startsWith('gc.sid='))?.split(';')[0];
 
+  const sidOf = (cookie) => decodeURIComponent(cookie.split('=')[1]).slice(2).split('.')[0];
+  const sessionRows = async (cookie) =>
+    (await pool.query('SELECT 1 FROM session WHERE sid = $1', [sidOf(cookie)])).rowCount;
+  const clearsCookie = (res) =>
+    /gc\.sid=;.*HttpOnly.*SameSite=Lax/i.test(res.headers['set-cookie'].join(';'));
+
   /** Starts sign-in and returns the agent cookie and the state GitHub would echo back. */
   async function begin() {
     const res = await request(app).get('/api/auth/github');
@@ -135,6 +141,8 @@ describe.skipIf(!hasTestDb)('auth (integration, test database)', () => {
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe('/error?code=state_mismatch');
     expect(oauth.exchangeCode).not.toHaveBeenCalled();
+    expect(await sessionRows(cookie)).toBe(0);
+    expect(clearsCookie(res)).toBe(true);
   });
 
   it('a missing state, or a callback with no session, redirects to state_mismatch', async () => {
@@ -153,6 +161,8 @@ describe.skipIf(!hasTestDb)('auth (integration, test database)', () => {
       .get('/api/auth/github/callback?error=access_denied')
       .set('Cookie', cookie);
     expect(res.headers.location).toBe('/error?code=access_denied');
+    expect(await sessionRows(cookie)).toBe(0);
+    expect(clearsCookie(res)).toBe(true);
   });
 
   it('a failed code exchange redirects to oauth_failed and creates no user', async () => {
@@ -166,7 +176,7 @@ describe.skipIf(!hasTestDb)('auth (integration, test database)', () => {
     expect((await pool.query('SELECT count(*)::int AS n FROM users')).rows[0].n).toBe(before);
   });
 
-  it('a state cannot be replayed after a successful sign-in', async () => {
+  it('a callback replayed with the old cookie after sign-in is rejected', async () => {
     const { cookie, state } = await begin();
     oauth.exchangeCode.mockResolvedValue({ token: 't', scopes: '' });
     oauth.fetchUser.mockResolvedValue({ id: 105, login: 'user105', avatarUrl: null });
@@ -177,13 +187,47 @@ describe.skipIf(!hasTestDb)('auth (integration, test database)', () => {
     expect(again.headers.location).toBe('/error?code=state_mismatch');
   });
 
+  it('issues a 24 hour cookie and refreshes it on each request (rolling)', async () => {
+    const { cookie, res } = await begin();
+    const header = res.headers['set-cookie'][0];
+    expect(header).toMatch(/Path=\//);
+    const first = new Date(header.match(/Expires=([^;]+)/)[1]).getTime();
+    expect(first - Date.now()).toBeGreaterThan(23.9 * 3600 * 1000);
+    expect(first - Date.now()).toBeLessThanOrEqual(24 * 3600 * 1000 + 2000);
+    await new Promise((r) => setTimeout(r, 1100));
+    const again = await request(app).get('/api/auth/github').set('Cookie', cookie);
+    const next = new Date(again.headers['set-cookie'][0].match(/Expires=([^;]+)/)[1]).getTime();
+    expect(next).toBeGreaterThan(first);
+  });
+
+  it('a database failure during sign-in redirects to oauth_failed and ends the session', async () => {
+    const flaky = {
+      query: (sql, ...rest) =>
+        /INSERT INTO users/.test(sql)
+          ? Promise.reject(new Error('db down'))
+          : pool.query(sql, ...rest),
+    };
+    const flakyApp = createApp(config, { pool: flaky, oauth, crypto });
+    oauth.exchangeCode.mockResolvedValue({ token: 't', scopes: '' });
+    oauth.fetchUser.mockResolvedValue({ id: 108, login: 'user108', avatarUrl: null });
+    const start = await request(flakyApp).get('/api/auth/github');
+    const state = new URL(start.headers.location).searchParams.get('state');
+    const cookie = cookieOf(start);
+    const res = await request(flakyApp)
+      .get(`/api/auth/github/callback?code=a&state=${state}`)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/error?code=oauth_failed');
+    expect(await sessionRows(cookie)).toBe(0);
+  });
+
   it('logout destroys the session server-side and invalidates the cookie', async () => {
     const { cookie } = await signIn(106);
     expect((await request(app).get('/api/me').set('Cookie', cookie)).status).toBe(200);
 
     const out = await request(app).post('/api/auth/logout').set('Cookie', cookie);
     expect(out.status).toBe(204);
-    expect(out.headers['set-cookie'].join(';')).toMatch(/gc\.sid=;/);
+    expect(clearsCookie(out)).toBe(true);
 
     const sid = decodeURIComponent(cookie.split('=')[1]).slice(2).split('.')[0];
     expect((await pool.query('SELECT 1 FROM session WHERE sid = $1', [sid])).rowCount).toBe(0);

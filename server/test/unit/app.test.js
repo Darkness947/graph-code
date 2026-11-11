@@ -8,6 +8,7 @@ import { attachRequestId } from '../../src/middleware/security.js';
 import { validateRequest, uuidParam, repoInputBody } from '../../src/middleware/validate.js';
 import { AppError } from '../../src/errors/AppError.js';
 import { ERROR_STATUS } from '../../src/errors/codes.js';
+import { cookieOptions } from '../../src/middleware/session.js';
 import { rateLimitKey, GLOBAL_LIMIT } from '../../src/middleware/rateLimits.js';
 
 const config = {
@@ -92,6 +93,17 @@ describe('security middleware', () => {
     expect(res.status).toBe(429);
     expect(res.body.error.code).toBe('RATE_LIMITED');
     expect(res.body.error.retryAfterSeconds).toBeGreaterThan(0);
+  });
+});
+
+describe('session cookie options', () => {
+  it('is secure only in production, always httpOnly and sameSite lax', () => {
+    expect(cookieOptions({ NODE_ENV: 'production' })).toEqual({
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+    });
+    expect(cookieOptions({ NODE_ENV: 'development' }).secure).toBe(false);
   });
 });
 

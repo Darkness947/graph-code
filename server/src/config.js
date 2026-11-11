@@ -130,7 +130,9 @@ export function loadConfig(env = process.env) {
   // GitHub OAuth (S-03)
   required('GITHUB_CLIENT_ID');
   required('GITHUB_CLIENT_SECRET');
-  if (isBlank(env.GITHUB_CALLBACK_URL)) {
+  if (isBlank(env.GITHUB_CALLBACK_URL) && cfg.NODE_ENV === 'production') {
+    bad('GITHUB_CALLBACK_URL', 'is required in production');
+  } else if (isBlank(env.GITHUB_CALLBACK_URL)) {
     cfg.GITHUB_CALLBACK_URL = 'http://localhost:5173/api/auth/github/callback';
   } else {
     const problem = httpUrl(String(env.GITHUB_CALLBACK_URL).trim());

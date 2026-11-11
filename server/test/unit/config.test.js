@@ -123,6 +123,14 @@ describe('loadConfig', () => {
     }
   });
 
+  it('requires GITHUB_CALLBACK_URL in production only', () => {
+    const prod = { ...validEnv(), NODE_ENV: 'production' };
+    expect(problemsOf(prod).problems.map((p) => p.name)).toContain('GITHUB_CALLBACK_URL');
+    expect(
+      loadConfig({ ...prod, GITHUB_CALLBACK_URL: 'https://x.app/api/auth/github/callback' }),
+    ).toBeTruthy();
+  });
+
   it('normalises APP_ORIGIN to a bare origin so CORS compares equal', () => {
     for (const v of ['https://x.app/', 'https://x.app/some/path', 'https://x.app']) {
       expect(loadConfig({ ...validEnv(), APP_ORIGIN: v }).APP_ORIGIN).toBe('https://x.app');
