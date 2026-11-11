@@ -1,44 +1,25 @@
-import { useEffect, useState } from 'react';
+import CloseButton from 'react-bootstrap/CloseButton';
 import Toast from 'react-bootstrap/Toast';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { dismissToast, useToastStore } from '../store/toastStore.js';
 
-/**
- * Shows the message a navigation carried in `location.state.toast`, for example
- * `navigate('/', { state: { toast: 'Please sign in' } })`.
- */
+/** Renders the message set by `showToast` (see `store/toastStore.js`). */
 export default function AppToast() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [message, setMessage] = useState(null);
-  const incoming = location.state?.toast;
-
-  // A new message arrived with this navigation: show it (state adjusted during render).
-  if (incoming && incoming !== message) setMessage(incoming);
-
-  useEffect(() => {
-    // Drop the message from history so a reload or Back does not show it again.
-    if (incoming) {
-      navigate({ pathname: location.pathname, search: location.search }, { replace: true });
-    }
-  }, [incoming, location.pathname, location.search, navigate]);
+  const message = useToastStore((s) => s.message);
+  const id = useToastStore((s) => s.id);
 
   return (
     <div className="app-toast-region" aria-live="polite">
       <Toast
+        key={id}
         className="app-toast"
         show={message !== null}
-        onClose={() => setMessage(null)}
+        onClose={dismissToast}
         delay={6000}
         autohide
       >
         <Toast.Body>
           <span>{message}</span>
-          <button
-            type="button"
-            className="btn-close"
-            aria-label="Dismiss"
-            onClick={() => setMessage(null)}
-          />
+          <CloseButton aria-label="Dismiss" onClick={dismissToast} />
         </Toast.Body>
       </Toast>
     </div>

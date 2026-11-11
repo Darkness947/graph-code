@@ -22,57 +22,40 @@
   --bs-heading-color: var(--text-primary);
   --bs-code-color: var(--text-primary);
 
-  /* Bootstrap builds some colours with rgba(var(--x-rgb), alpha), so these repeat the tokens
-     --bg-canvas, --text-primary and --accent-blue as RGB triplets. */
-  --bs-body-bg-rgb: 13, 17, 23;
-  --bs-body-color-rgb: 230, 237, 243;
-  --bs-primary-rgb: 47, 129, 247;
-  --bs-link-color-rgb: 47, 129, 247;
-  --bs-link-hover-color-rgb: 47, 129, 247;
+  /* Bootstrap builds some colours with rgba(var(--x-rgb), alpha). */
+  --bs-body-bg-rgb: var(--bg-canvas-rgb);
+  --bs-body-color-rgb: var(--text-primary-rgb);
+  --bs-primary-rgb: var(--accent-blue-rgb);
+  --bs-link-color-rgb: var(--accent-blue-rgb);
+  --bs-link-hover-color-rgb: var(--accent-blue-rgb);
   --bs-focus-ring-color: var(--accent-blue);
 }
 
-body {
-  min-height: 100vh;
-}
-
-h1,
-.page-title {
+h1 {
   font-size: var(--font-size-page-title);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-h2,
-.panel-title {
+h2 {
   font-size: var(--font-size-panel-title);
   font-weight: 600;
 }
 
-.font-mono,
-code {
-  font-family: var(--font-mono);
-}
-
-.text-secondary-token {
-  color: var(--text-secondary);
-}
-
-/* Focus: every interactive element shows an --accent-blue ring (spec 8.1). */
-:focus-visible,
-.btn:focus-visible,
-.dropdown-item:focus-visible,
-.btn-close:focus-visible {
-  outline: 2px solid var(--accent-blue);
+/* Focus: every interactive element shows an --accent-blue ring (spec 8.1). Bootstrap removes
+   the outline per component (`outline: 0`), so this one rule is marked important instead of
+   listing every component. */
+:focus-visible {
+  outline: 2px solid var(--accent-blue) !important;
   outline-offset: 2px;
-  box-shadow: none;
 }
 
 /* Buttons. Text on the blue fill uses the canvas colour: 5.0:1, which meets WCAG AA. */
 .btn {
   --bs-btn-font-size: var(--font-size-base);
-  --bs-btn-border-radius: 6px;
+  --bs-btn-border-radius: var(--radius-sm);
   --bs-btn-font-weight: 600;
+  --bs-btn-focus-shadow-rgb: var(--accent-blue-rgb);
 }
 
 .btn-primary {
@@ -131,10 +114,6 @@ code {
   --bs-toast-color: var(--text-primary);
   --bs-toast-border-color: var(--border-default);
   --bs-toast-font-size: var(--font-size-base);
-}
-
-.spinner-border {
-  color: var(--accent-blue);
 }
 
 /* App frame */
@@ -210,7 +189,7 @@ code {
   color: var(--text-primary);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .user-menu-toggle:hover,
@@ -292,7 +271,7 @@ code {
 .hero-sub {
   max-width: 38em;
   margin: 20px auto 32px;
-  font-size: 17px;
+  font-size: var(--font-size-lead);
   line-height: 1.55;
   color: var(--text-secondary);
   text-wrap: balance;
@@ -306,7 +285,7 @@ code {
   background-image: radial-gradient(var(--border-default) 1px, transparent 1px);
   background-size: 22px 22px;
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 24px 80px -32px color-mix(in srgb, var(--accent-blue) 45%, transparent);
 }
 
@@ -321,7 +300,7 @@ code {
   bottom: 14px;
   left: 16px;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--font-size-small);
   color: var(--text-secondary);
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
@@ -348,7 +327,7 @@ code {
 
 .preview-node text {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--font-size-small);
   fill: var(--text-secondary);
   text-anchor: middle;
   dominant-baseline: central;
@@ -364,7 +343,6 @@ code {
 }
 
 .preview-node.is-selected text {
-  font-size: 13px;
   font-weight: 600;
   fill: var(--text-primary);
 }
@@ -446,7 +424,7 @@ code {
 
 .site-footer p + p {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: var(--font-size-small);
 }
 
 .site-footer a {
@@ -476,12 +454,13 @@ code {
 
 .text-page p,
 .text-page li {
-  font-size: 15px;
+  font-size: var(--font-size-reading);
   line-height: 1.65;
 }
 
 .text-page .lead-text {
-  font-size: 17px;
+  text-wrap: balance;
+  font-size: var(--font-size-lead);
   color: var(--text-secondary);
 }
 
@@ -506,7 +485,7 @@ code {
   color: var(--text-secondary);
 }
 
-/* Message pages (error, not found, placeholders) */
+/* Message pages (error, not found) */
 .message-panel {
   width: 100%;
   max-width: 460px;
@@ -515,7 +494,7 @@ code {
   text-align: center;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .message-panel .message-icon {
@@ -534,7 +513,7 @@ code {
 
 .message-panel p {
   margin: 0 0 24px;
-  font-size: 15px;
+  font-size: var(--font-size-reading);
   line-height: 1.55;
   color: var(--text-secondary);
 }
@@ -543,12 +522,6 @@ code {
   display: flex;
   gap: 12px;
   justify-content: center;
-}
-
-.message-code {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--text-secondary);
 }
 
 .page-container {

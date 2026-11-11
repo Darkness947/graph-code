@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import { ApiError, request } from '../src/api/client.js';
 import { useSessionStore } from '../src/features/auth/useSession.js';
 import AppRoutes from '../src/routes.jsx';
+import { dismissToast } from '../src/store/toastStore.js';
 
 export const USER = {
   id: 'b7c1b0de-0000-4000-8000-000000000001',
@@ -20,7 +21,8 @@ export const USER = {
  *   `me`: a user object (signed in), `null` (401), `'pending'` (never answers) or `'down'`.
  */
 export function mockApi({ me = null, logout = 'ok' } = {}) {
-  useSessionStore.getState().reset();
+  useSessionStore.setState({ status: 'idle', user: null });
+  dismissToast();
   vi.mocked(request).mockImplementation((path) => {
     if (path === '/me') {
       if (me === 'pending') return new Promise(() => {});

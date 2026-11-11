@@ -1,5 +1,6 @@
 import { Outlet, Route, Routes } from 'react-router-dom';
 import AppToast from './components/AppToast.jsx';
+import Footer from './components/Footer.jsx';
 import NavBar from './components/NavBar.jsx';
 import ViewportNotice from './components/ViewportNotice.jsx';
 import ProtectedRoute from './features/auth/ProtectedRoute.jsx';
@@ -25,14 +26,26 @@ function Layout() {
   );
 }
 
+/** The public text pages end with the site footer (spec 8.4). */
+function WithFooter() {
+  return (
+    <>
+      <Outlet />
+      <Footer />
+    </>
+  );
+}
+
 /** The route table from spec 8.2. Must be rendered inside a router. */
 export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<Landing />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/privacy" element={<Privacy />} />
+        <Route element={<WithFooter />}>
+          <Route path="/" element={<Landing />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/privacy" element={<Privacy />} />
+        </Route>
         <Route path="/error" element={<ErrorPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />

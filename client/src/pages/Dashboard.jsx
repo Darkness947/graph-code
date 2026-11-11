@@ -3,7 +3,7 @@ export default function Dashboard() {
   return (
     <div className="page-container">
       <h1>Your Repositories</h1>
-      <p className="text-secondary-token">Repository analysis is on its way.</p>
+      <p className="text-body-secondary">Repository analysis is on its way.</p>
     </div>
   );
 }

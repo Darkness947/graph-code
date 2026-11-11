@@ -10,7 +10,6 @@ export class ApiError extends Error {
     this.status = status;
     this.code = error.code ?? 'INTERNAL';
     this.requestId = error.requestId;
-    this.details = error;
   }
 }
 

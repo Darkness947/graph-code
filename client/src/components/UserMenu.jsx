@@ -1,20 +1,23 @@
 import Dropdown from 'react-bootstrap/Dropdown';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { logout } from '../api/auth.js';
 import { useSessionStore } from '../features/auth/useSession.js';
+import { showToast } from '../store/toastStore.js';
 
 /** Avatar and login with a dropdown: "Dashboard" and "Log out" (spec 8.3). */
 export default function UserMenu({ user }) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const signOut = useSessionStore((s) => s.signOut);
+  const clearSession = useSessionStore((s) => s.clear);
 
   const handleLogout = async () => {
     try {
-      await signOut();
-      navigate('/');
+      await logout();
     } catch {
-      navigate(location, { replace: true, state: { toast: 'Something went wrong. Try again.' } });
+      showToast('Something went wrong. Try again.');
+      return;
     }
+    clearSession();
+    navigate('/');
   };
 
   return (

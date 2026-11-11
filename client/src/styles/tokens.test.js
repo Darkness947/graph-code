@@ -29,9 +29,17 @@ const TOKENS = {
   '--topbar-height': '56px',
 };
 
+// Bootstrap needs some colours as RGB triplets; each must equal its hex token.
+const TRIPLETS = ['--bg-canvas', '--text-primary', '--accent-blue'];
+const toTriplet = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ');
+
 describe('design tokens (spec 8.1)', () => {
   it.each(Object.entries(TOKENS))('%s is %s', (name, value) => {
     expect(css).toContain(`${name}: ${value};`);
+  });
+
+  it.each(TRIPLETS)('%s-rgb matches its hex value', (name) => {
+    expect(css).toContain(`${name}-rgb: ${toTriplet(TOKENS[name])};`);
   });
 
   it('uses the monospace stack from the spec', () => {
@@ -51,7 +59,8 @@ describe('Bootstrap overrides and colour rules', () => {
     expect(globalCss).toContain(`${bootstrapVar}: var(${token});`);
   });
 
-  it('has no hex colours outside tokens.css', () => {
+  it('has no literal colours outside tokens.css', () => {
+    expect(globalCss).not.toMatch(/-rgb:\s*\d/);
     expect(globalCss).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 

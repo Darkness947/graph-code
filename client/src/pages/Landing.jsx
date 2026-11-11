@@ -1,5 +1,4 @@
 import { Navigate } from 'react-router-dom';
-import Footer from '../components/Footer.jsx';
 import SignInButton from '../components/SignInButton.jsx';
 import { useSession } from '../features/auth/useSession.js';
 import WorkspacePreview from './WorkspacePreview.jsx';
@@ -28,36 +27,33 @@ export default function Landing() {
   if (isSignedIn) return <Navigate to="/dashboard" replace />;
 
   return (
-    <>
-      <div className="landing">
-        <section className="hero">
-          <h1 className="hero-headline">
-            See your codebase&apos;s architecture. Predict what breaks before you change it.
-          </h1>
-          <p className="hero-sub">
-            Graph Code turns a GitHub repository into an interactive dependency graph and uses AI to
-            show which files a change will affect.
-          </p>
-          <SignInButton large />
-          <WorkspacePreview />
-        </section>
+    <div className="landing">
+      <section className="hero">
+        <h1 className="hero-headline">
+          See your codebase&apos;s architecture. Predict what breaks before you change it.
+        </h1>
+        <p className="hero-sub">
+          Graph Code turns a GitHub repository into an interactive dependency graph and uses AI to
+          show which files a change will affect.
+        </p>
+        <SignInButton large />
+        <WorkspacePreview />
+      </section>
 
-        <section className="how" aria-labelledby="how-title">
-          <h2 className="how-title" id="how-title">
-            How it works
-          </h2>
-          <ol className="how-steps">
-            {STEPS.map((step) => (
-              <li className="how-step" key={step.title}>
-                <i className={`bi ${step.icon}`} aria-hidden="true" />
-                <h3>{step.title}</h3>
-                <p>{step.text}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </div>
-      <Footer />
-    </>
+      <section className="how" aria-labelledby="how-title">
+        <h2 className="how-title" id="how-title">
+          How it works
+        </h2>
+        <ol className="how-steps">
+          {STEPS.map((step) => (
+            <li className="how-step" key={step.title}>
+              <i className={`bi ${step.icon}`} aria-hidden="true" />
+              <h3>{step.title}</h3>
+              <p>{step.text}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </div>
   );
 }

@@ -1,5 +1,3 @@
-import Footer from '../components/Footer.jsx';
-
 // The four statements required by spec 8.4.
 const STATEMENTS = [
   {
@@ -23,20 +21,17 @@ const STATEMENTS = [
 /** Privacy and AI notice (spec 8.2, 8.4). */
 export default function Privacy() {
   return (
-    <>
-      <article className="text-page">
-        <h1>Privacy and AI notice</h1>
-        <p className="lead-text">What Graph Code does with a repository you analyze.</p>
-        <ul>
-          {STATEMENTS.map((statement) => (
-            <li key={statement.icon}>
-              <i className={`bi ${statement.icon}`} aria-hidden="true" />
-              <span>{statement.text}</span>
-            </li>
-          ))}
-        </ul>
-      </article>
-      <Footer />
-    </>
+    <article className="text-page">
+      <h1>Privacy and AI notice</h1>
+      <p className="lead-text">What Graph Code does with a repository you analyze.</p>
+      <ul>
+        {STATEMENTS.map((statement) => (
+          <li key={statement.icon}>
+            <i className={`bi ${statement.icon}`} aria-hidden="true" />
+            <span>{statement.text}</span>
+          </li>
+        ))}
+      </ul>
+    </article>
   );
 }

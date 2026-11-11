@@ -3,7 +3,7 @@ export default function Workspace() {
   return (
     <div className="page-container">
       <h1>Graph workspace</h1>
-      <p className="text-secondary-token">The dependency graph is on its way.</p>
+      <p className="text-body-secondary">The dependency graph is on its way.</p>
     </div>
   );
 }

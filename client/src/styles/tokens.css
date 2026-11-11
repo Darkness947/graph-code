@@ -17,6 +17,11 @@
   --edge-rest: rgb(139 148 158 / 12%);
   --edge-active: rgb(139 148 158 / 100%);
 
+  /* The same colours as RGB triplets, for Bootstrap's rgba(var(--x-rgb), alpha). */
+  --bg-canvas-rgb: 13, 17, 23;
+  --text-primary-rgb: 230, 237, 243;
+  --accent-blue-rgb: 47, 129, 247;
+
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -24,7 +29,12 @@
   --font-size-base: 14px;
   --font-size-panel-title: 16px;
   --font-size-page-title: 24px;
+  --font-size-small: 12px;
+  --font-size-reading: 15px;
+  --font-size-lead: 17px;
 
   --topbar-height: 56px;
+  --radius-sm: 6px;
   --radius: 8px;
+  --radius-lg: 12px;
 }
