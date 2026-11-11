@@ -19,10 +19,13 @@
     "parser:check": "node -e \"console.error('parser:check is implemented in T1.6'); process.exit(1)\""
   },
   "dependencies": {
+    "axios": "^1.21.1",
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.10",
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.4",
+    "express-session": "^1.19.0",
     "express-validator": "^7.3.2",
     "helmet": "^8.3.0",
     "pg": "^8.23.1"
