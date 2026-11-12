@@ -1,0 +1,1 @@
+{ "compilerOptions": { "paths": { "@/*": ["src/*"], "@config": ["config/index.ts"] } } }
