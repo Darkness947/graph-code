@@ -2,9 +2,12 @@
   command = "npm run build"
   publish = "dist"
 
+[build.environment]
+  NODE_VERSION = "26"
+
 [[redirects]]
   from = "/api/*"
-  to = "https://<render-service>.onrender.com/api/:splat"
+  to = "https://graph-code-api-8nm2.onrender.com/api/:splat"
   status = 200
   force = true
 
