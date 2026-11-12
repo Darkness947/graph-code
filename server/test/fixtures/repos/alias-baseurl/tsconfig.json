@@ -1,0 +1,12 @@
+{
+  // comments and trailing commas are allowed in tsconfig
+  "compilerOptions": {
+    /* base */
+    "baseUrl": "src",
+    "paths": {
+      "@/*": ["*"],
+      "~lib/*": ["lib/*", "shared/*"],
+      "missing/*": ["nowhere/*"],
+    },
+  },
+}

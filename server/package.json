@@ -16,7 +16,7 @@
     "db:check": "node src/db/cli.js check",
     "config:check": "node src/configCheck.js",
     "ai:ping": "node -e \"console.error('ai:ping is implemented in T3.5'); process.exit(1)\"",
-    "parser:check": "node -e \"console.error('parser:check is implemented in T1.6'); process.exit(1)\""
+    "parser:check": "node src/parserCheck.js"
   },
   "dependencies": {
     "axios": "^1.21.1",
@@ -28,7 +28,11 @@
     "express-session": "^1.19.0",
     "express-validator": "^7.3.2",
     "helmet": "^8.3.0",
-    "pg": "^8.23.1"
+    "jsonc-parser": "^3.3.1",
+    "pg": "^8.23.1",
+    "tree-sitter": "0.21.1",
+    "tree-sitter-javascript": "0.23.1",
+    "tree-sitter-typescript": "0.23.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
