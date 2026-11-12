@@ -106,6 +106,10 @@ export class JavaScriptExtractor extends SourceExtractor {
    * @param {(name: string | undefined) => void} add
    */
   collectExportNames(node, add) {
+    if (isDefaultExport(node)) {
+      add('default');
+      return;
+    }
     const declaration = node.childForFieldName('declaration');
     if (declaration) {
       if (
@@ -118,10 +122,6 @@ export class JavaScriptExtractor extends SourceExtractor {
       } else {
         add(declaration.childForFieldName('name')?.text);
       }
-      return;
-    }
-    if (isDefaultExport(node)) {
-      add('default');
       return;
     }
     for (const child of node.namedChildren) {

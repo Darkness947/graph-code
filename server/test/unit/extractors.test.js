@@ -114,3 +114,16 @@ describe('restricted node API', () => {
     expect(() => tree.rootText).toThrow(/disallowed/);
   });
 });
+
+describe('default exports', () => {
+  it.each([
+    ['export default function f() {}', 'javascript'],
+    ['export default class C {}', 'javascript'],
+    ['export default async function* g() {}', 'javascript'],
+    ['export default class C {}', 'typescript'],
+    ['export default abstract class A {}', 'typescript'],
+  ])('records %s as "default", not the declaration name', (source, grammar) => {
+    const extractor = grammar === 'typescript' ? ts : js;
+    expect(run(extractor, grammar, source).exports).toEqual(['default']);
+  });
+});
