@@ -57,6 +57,18 @@ describe('NavBar (spec 8.3)', () => {
     expect(screen.queryByText('Please sign in')).not.toBeInTheDocument();
   });
 
+  it('treats an already-expired session as logged out', async () => {
+    mockApi({ me: USER, logout: 'expired' });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    await user.click(await topBar().findByRole('button', { name: /octocat/ }));
+    await user.click(topBar().getByRole('button', { name: 'Log out' }));
+
+    expect(await topBar().findByRole('link', { name: 'Sign in with GitHub' })).toBeInTheDocument();
+    expect(screen.queryByText('Something went wrong. Try again.')).not.toBeInTheDocument();
+  });
+
   it('stays signed in and says so when Log out fails', async () => {
     mockApi({ me: USER, logout: 'fail' });
     const user = userEvent.setup();

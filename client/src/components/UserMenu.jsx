@@ -12,9 +12,12 @@ export default function UserMenu({ user }) {
   const handleLogout = async () => {
     try {
       await logout();
-    } catch {
-      showToast('Something went wrong. Try again.');
-      return;
+    } catch (err) {
+      // A 401 means the session is already gone, which is what the user asked for.
+      if (err.status !== 401) {
+        showToast('Something went wrong. Try again.');
+        return;
+      }
     }
     clearSession();
     navigate('/');
@@ -24,7 +27,14 @@ export default function UserMenu({ user }) {
     <Dropdown align="end">
       <Dropdown.Toggle as="button" type="button" className="user-menu-toggle">
         {user.avatarUrl ? (
-          <img className="user-avatar" src={user.avatarUrl} alt="" width="24" height="24" />
+          <img
+            className="user-avatar"
+            src={user.avatarUrl}
+            alt=""
+            width="24"
+            height="24"
+            referrerPolicy="no-referrer"
+          />
         ) : (
           <span className="user-avatar">
             <i className="bi bi-person-fill" aria-hidden="true" />

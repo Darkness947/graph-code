@@ -3,7 +3,7 @@ import MessagePanel from '../components/MessagePanel.jsx';
 import SignInButton from '../components/SignInButton.jsx';
 
 // Titles, text and actions from spec 8.7. `retry` offers "Try again" instead of "Back to home".
-const KNOWN = new Map([
+const ERROR_PANELS = new Map([
   [
     'access_denied',
     {
@@ -44,7 +44,7 @@ const FALLBACK = {
 /** Error page, chosen by `?code=` (spec 8.7). */
 export default function ErrorPage() {
   const [params] = useSearchParams();
-  const { retry, ...panel } = KNOWN.get(params.get('code')) ?? FALLBACK;
+  const { retry, ...panel } = ERROR_PANELS.get(params.get('code')) ?? FALLBACK;
 
   return (
     <MessagePanel {...panel}>

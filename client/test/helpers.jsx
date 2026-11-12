@@ -17,7 +17,7 @@ export const USER = {
  * Starts a test from a fresh session and sets what the mocked `request` answers.
  * The test file must mock `api/client.js` so that `request` is a `vi.fn()` and `ApiError`
  * stays real.
- * @param {{ me?: object | null | 'pending' | 'down', logout?: 'ok' | 'fail' }} [options]
+ * @param {{ me?: object | null | 'pending' | 'down', logout?: 'ok' | 'fail' | 'expired' }} [options]
  *   `me`: a user object (signed in), `null` (401), `'pending'` (never answers) or `'down'`.
  */
 export function mockApi({ me = null, logout = 'ok' } = {}) {
@@ -35,9 +35,12 @@ export function mockApi({ me = null, logout = 'ok' } = {}) {
       return Promise.resolve(me);
     }
     if (path === '/auth/logout') {
-      return logout === 'ok'
-        ? Promise.resolve(null)
-        : Promise.reject(new ApiError(500, { code: 'INTERNAL' }));
+      if (logout === 'ok') return Promise.resolve(null);
+      return Promise.reject(
+        logout === 'expired'
+          ? new ApiError(401, { code: 'UNAUTHENTICATED' })
+          : new ApiError(500, { code: 'INTERNAL' }),
+      );
     }
     return Promise.reject(new ApiError(404, { code: 'NOT_FOUND' }));
   });

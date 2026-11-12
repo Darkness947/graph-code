@@ -14,9 +14,13 @@ export const useSessionStore = create((set, get) => ({
   status: 'idle',
   user: null,
 
-  /** Asks the server who is signed in. Runs once; later callers share the answer. */
+  /**
+   * Asks the server who is signed in. Runs once and later callers share the answer, except
+   * that a failed attempt is tried again the next time a page asks.
+   */
   async load() {
-    if (get().status !== 'idle') return;
+    const { status } = get();
+    if (status !== 'idle' && status !== 'error') return;
     set({ status: 'loading' });
     try {
       set({ status: 'authenticated', user: await getMe() });

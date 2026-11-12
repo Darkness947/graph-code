@@ -1,6 +1,8 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { mockApi, renderApp, USER } from '../../../test/helpers.jsx';
+import { request } from '../../api/client.js';
 
 vi.mock('../../api/client.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -45,5 +47,18 @@ describe('ProtectedRoute (spec 8.2)', () => {
     expect(
       await screen.findByRole('heading', { name: 'Something went wrong' }),
     ).toBeInTheDocument();
+  });
+
+  it('asks again after a failed session check instead of staying broken', async () => {
+    mockApi({ me: 'down' });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+    await screen.findByRole('heading', { name: 'Something went wrong' });
+
+    vi.mocked(request).mockResolvedValue(USER); // the server is back
+    await user.click(screen.getByRole('link', { name: 'Back to home' }));
+
+    // The landing page re-checks the session, finds the user and redirects to the dashboard.
+    expect(await screen.findByRole('heading', { name: 'Your Repositories' })).toBeInTheDocument();
   });
 });
