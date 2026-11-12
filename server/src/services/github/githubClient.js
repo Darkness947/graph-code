@@ -19,6 +19,8 @@ const SHA_RE = /^[0-9a-f]{40}$/;
  * @returns {URL}
  */
 export function assertAllowedUrl(input) {
+  // URL parsing drops an explicit default port (":443"), so check the raw text first.
+  if (typeof input === 'string' && hasExplicitAuthorityExtras(input)) throw blocked();
   let url;
   try {
     url = new URL(input);
@@ -35,6 +37,12 @@ export function assertAllowedUrl(input) {
     throw blocked();
   }
   return url;
+}
+
+/** True when the authority part of an absolute or protocol-relative URL contains ":" (port or password). */
+function hasExplicitAuthorityExtras(text) {
+  const authority = /^(?:[a-z][a-z0-9+.-]*:)?\/\/([^/?#]*)/i.exec(text)?.[1];
+  return authority !== undefined && authority.includes(':');
 }
 
 function blocked() {
@@ -108,7 +116,9 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
       });
       if (res.status >= 300 && res.status < 400 && res.headers?.location) {
         if (hops >= MAX_REDIRECTS) throw unavailable('REDIRECT', res.status);
-        url = assertAllowedUrl(new URL(res.headers.location, url));
+        const location = String(res.headers.location);
+        if (hasExplicitAuthorityExtras(location)) throw blocked();
+        url = assertAllowedUrl(new URL(location, url));
         continue;
       }
       return res;
@@ -128,6 +138,7 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
           throw unavailable('TOO_LARGE');
         }
         lastReason = 'NETWORK';
+        lastStatus = undefined;
         continue;
       }
       if (res.status >= 200 && res.status < 300) return res.data;

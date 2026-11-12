@@ -39,6 +39,9 @@ describe('allowlist (AC1)', () => {
     'https://user@api.github.com/x',
     'https://user:pw@api.github.com/x',
     'https://api.github.com:8443/x',
+    'https://api.github.com:443/x',
+    'https://api.github.com:/x',
+    '//api.github.com:443/x',
     'ftp://github.com/x',
     'not a url',
   ])('rejects %s', (url) => {
@@ -307,5 +310,34 @@ describe('timeouts and retries (AC2, spec 7.4)', () => {
     const { client, request } = make(redirect('https://api.github.com/b'), ok(repoJson));
     await client.getRepository('secret', 'octo', 'hello');
     expect(request.mock.calls[1][0].headers.Authorization).toBe('Bearer secret');
+  });
+
+  it('rejects a redirect Location with an explicit default port', async () => {
+    const { client, request } = make(redirect('https://api.github.com:443/b'), ok(repoJson));
+    await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
+      code: 'GITHUB_UNAVAILABLE',
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the earlier 5xx status when the retry fails with a network error', async () => {
+    const { client } = make(ok('', 503), new Error('reset'));
+    const err = await client.getRepository('t', 'octo', 'hello').catch((e) => e);
+    expect(err.githubReason).toBe('NETWORK');
+    expect(err.githubStatus).toBeUndefined();
+  });
+
+  it('caps file source at 1 MB and does not retry when it is exceeded', async () => {
+    const { client, request } = make(
+      new Error('maxContentLength size of 1048576 exceeded'),
+      ok('x'),
+    );
+    await expect(client.getFileSource('t', 'octo', 'hello', 'a.js', SHA)).rejects.toMatchObject({
+      code: 'GITHUB_UNAVAILABLE',
+      githubReason: 'TOO_LARGE',
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0][0].maxContentLength).toBe(1024 * 1024);
+    expect(request.mock.calls[0][0].responseType).toBe('text');
   });
 });
