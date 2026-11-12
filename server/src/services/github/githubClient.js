@@ -89,9 +89,11 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
   async function attempt(startUrl, opts) {
     let url = assertAllowedUrl(startUrl);
     const origin = url.hostname;
+    let sendToken = true;
     for (let hops = 0; ; hops++) {
       const headers = { ...opts.headers };
-      if (url.hostname !== origin) delete headers.Authorization;
+      if (url.hostname !== origin) sendToken = false;
+      if (!sendToken) delete headers.Authorization;
       const res = await http.request({
         method: 'GET',
         url: url.toString(),
@@ -152,7 +154,14 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
       ...extra,
     });
 
-  const json = (data) => (typeof data === 'string' ? JSON.parse(data) : data);
+  const json = (data) => {
+    if (typeof data !== 'string') return data;
+    try {
+      return JSON.parse(data);
+    } catch {
+      throw unavailable('CLIENT');
+    }
+  };
 
   return {
     /**

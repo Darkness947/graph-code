@@ -285,4 +285,27 @@ describe('timeouts and retries (AC2, spec 7.4)', () => {
     const err = await client.getRepository('super-secret-token', 'octo', 'hello').catch((e) => e);
     expect(JSON.stringify({ m: err.message, x: err.extras })).not.toContain('super-secret-token');
   });
+
+  it('maps a non-JSON 2xx body to GITHUB_UNAVAILABLE instead of a raw SyntaxError', async () => {
+    const { client } = make(ok('<html>captive portal</html>'));
+    await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
+      code: 'GITHUB_UNAVAILABLE',
+    });
+  });
+
+  it('keeps the token off every hop after leaving the original host', async () => {
+    const { client, request } = make(
+      redirect('https://github.com/a'),
+      redirect('https://api.github.com/b'),
+      ok(repoJson),
+    );
+    await client.getRepository('secret', 'octo', 'hello');
+    expect(request.mock.calls[2][0].headers.Authorization).toBeUndefined();
+  });
+
+  it('keeps the token on a same-host redirect', async () => {
+    const { client, request } = make(redirect('https://api.github.com/b'), ok(repoJson));
+    await client.getRepository('secret', 'octo', 'hello');
+    expect(request.mock.calls[1][0].headers.Authorization).toBe('Bearer secret');
+  });
 });
