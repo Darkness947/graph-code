@@ -34,7 +34,11 @@ function joinNormalize(dir, rel) {
  * @returns {string[]}
  */
 function candidates(p) {
-  const list = [p, ...EXTENSIONS.map((e) => p + e), ...EXTENSIONS.map((e) => `${p}/index${e}`)];
+  const list = [
+    p,
+    ...EXTENSIONS.map((e) => p + e),
+    ...EXTENSIONS.map((e) => (p === '' ? `index${e}` : `${p}/index${e}`)),
+  ];
   for (const [ext, targets] of Object.entries(JS_TO_TS)) {
     if (p.endsWith(ext)) list.push(...targets.map((t) => p.slice(0, -ext.length) + t));
   }
@@ -131,7 +135,7 @@ export class JsTsResolver extends LanguageResolver {
       // A bare "*" mapping may legitimately fall through to node_modules.
       if (pattern !== '*') aliasMatched = true;
       for (const target of targets) {
-        const substituted = split ? target.replace('*', captured) : target;
+        const substituted = split ? target.replace('*', () => captured) : target;
         const normalized = joinNormalize(this.baseUrl ?? '', substituted);
         if (normalized === null) continue;
         const hit = find(normalized);
@@ -141,7 +145,7 @@ export class JsTsResolver extends LanguageResolver {
     if (aliasMatched) return { unresolved: 'alias_not_found' };
 
     // baseUrl alone: a non-relative specifier may name a file under it.
-    if (this.baseUrl !== null) {
+    if (this.baseUrl !== null && specifier !== '') {
       const normalized = joinNormalize(this.baseUrl, specifier);
       const hit = normalized === null ? undefined : find(normalized);
       if (hit) return { path: hit };

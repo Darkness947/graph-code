@@ -139,3 +139,24 @@ describe('JsTsResolver', () => {
     });
   });
 });
+
+describe('JsTsResolver root index and odd specifiers', () => {
+  const resolver = new JsTsResolver();
+  resolver.configure([
+    {
+      path: 'tsconfig.json',
+      content: '{"compilerOptions":{"baseUrl":".","paths":{"@root":["."]}}}',
+    },
+  ]);
+  const index = new Set(['index.ts', 'a/b.ts']);
+
+  it('resolves a directory import that lands on the repository root', () => {
+    expect(resolver.resolve('..', 'a/b.ts', index)).toEqual({ path: 'index.ts' });
+    expect(resolver.resolve('.', 'x.ts', index)).toEqual({ path: 'index.ts' });
+    expect(resolver.resolve('@root', 'a/b.ts', index)).toEqual({ path: 'index.ts' });
+  });
+
+  it('treats an empty specifier as external', () => {
+    expect(resolver.resolve('', 'a/b.ts', index)).toEqual({ external: true });
+  });
+});
