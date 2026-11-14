@@ -173,6 +173,15 @@ describe('extractArchive: limits (AC2)', () => {
     expect((await extract(zip, { maxTotalSourceBytes: 101 })).files).toHaveLength(3);
   });
 
+  it('two entries with the same path → ARCHIVE_INVALID', async () => {
+    const zip = renameEntry(
+      await buildZip({ 'a.js': 'x', 'b.js': 'y' }),
+      ARCHIVE_ROOT + '/b.js',
+      ARCHIVE_ROOT + '/a.js',
+    );
+    await expect(extract(zip)).rejects.toMatchObject({ code: 'ARCHIVE_INVALID' });
+  });
+
   it('data that is not a ZIP → ARCHIVE_INVALID', async () => {
     await expect(extract(Buffer.from('not a zip at all'))).rejects.toMatchObject({
       code: 'ARCHIVE_INVALID',

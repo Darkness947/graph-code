@@ -3,6 +3,7 @@ import {
   IngestionOrchestrator,
   PHASES,
   PLACEHOLDER_STEPS,
+  createPipelineSteps,
 } from '../../src/services/ingestion/orchestrator.js';
 import { IngestionError } from '../../src/services/ingestion/IngestionError.js';
 import { createJobRepository } from '../../src/services/ingestion/jobRepository.js';
@@ -110,6 +111,15 @@ describe('IngestionOrchestrator.run (unit)', () => {
     await new IngestionOrchestrator({ jobs, logger: { error: vi.fn() } }).run('job-1');
     expect(Object.keys(PLACEHOLDER_STEPS)).toEqual(PHASES);
     expect(jobs.fail).toHaveBeenCalledExactlyOnceWith('job-1', 'INTERNAL');
+  });
+
+  it('the real pipeline replaces fetching and extracting and keeps every phase', () => {
+    const steps = createPipelineSteps({ pool: {}, crypto: {}, github: {}, limits: {} });
+    expect(Object.keys(steps)).toEqual(PHASES);
+    expect(steps.fetching).not.toBe(PLACEHOLDER_STEPS.fetching);
+    expect(steps.extracting).not.toBe(PLACEHOLDER_STEPS.extracting);
+    expect(steps.parsing).toBe(PLACEHOLDER_STEPS.parsing);
+    expect(steps.persisting).toBe(PLACEHOLDER_STEPS.persisting);
   });
 
   it('rejects unknown ingestion codes', () => {

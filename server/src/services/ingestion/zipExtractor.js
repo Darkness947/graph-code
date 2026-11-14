@@ -82,6 +82,8 @@ export async function extractArchive(buffer, { limits, registry = createDefaultR
     /** @type {ExtractedArchive} */
     const result = { files: [], configFiles: [], skipped: [] };
     let totalBytes = 0;
+    /** Kept paths: two entries for one path would become two nodes for one file. */
+    const seen = new Set();
 
     for (let entry; (entry = await nextEntry(zip));) {
       // Also true for a non-empty entry that claims zero compressed bytes.
@@ -95,6 +97,10 @@ export async function extractArchive(buffer, { limits, registry = createDefaultR
       if (path === null) continue;
       const kind = classifyPath(path, registry);
       if (kind === 'skip') continue;
+      if (seen.has(path)) {
+        throw new IngestionError('ARCHIVE_INVALID', 'two entries have the same path');
+      }
+      seen.add(path);
       if (entry.uncompressedSize > limits.maxFileBytes) {
         if (kind === 'source') result.skipped.push({ path, reason: 'too_large' });
         continue;
