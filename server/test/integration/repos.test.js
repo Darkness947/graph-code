@@ -341,10 +341,20 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
       expect(res.body.nextPage).toBe(3);
     });
 
-    it.each(['0', '-1', 'abc', '1.5'])('rejects page=%s with 400', async (page) => {
+    it('nextPage is null at the last accepted page, even when the page is full', async () => {
+      github.listUserRepositories.mockResolvedValue(
+        Array.from({ length: 30 }, (_, i) => raw(`r${i}`)),
+      );
+      const res = await request(app).get('/api/github/repos?page=10000').set('Cookie', cookieA);
+      expect(res.status).toBe(200);
+      expect(res.body.nextPage).toBeNull();
+    });
+
+    it.each(['0', '-1', 'abc', '1.5', '10001'])('rejects page=%s with 400', async (page) => {
       const res = await request(app).get(`/api/github/repos?page=${page}`).set('Cookie', cookieA);
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.details[0].message).toBe('page must be a whole number from 1 to 10000');
     });
   });
 });

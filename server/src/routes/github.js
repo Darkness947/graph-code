@@ -5,6 +5,7 @@ import { requireUserToken } from '../services/auth/tokenCrypto.js';
 import { repoKey } from '../services/repos/repositoryService.js';
 
 const PAGE_SIZE = 30;
+const MAX_PAGE = 10000;
 
 /**
  * `GET /api/github/repos` (spec 6.2): the user's public repositories from GitHub.
@@ -17,7 +18,10 @@ export function createGithubRouter({ pool, crypto, github, repos }) {
 
   router.get(
     '/repos',
-    query('page').optional().isInt({ min: 1, max: 10000 }).withMessage('page must be 1 or more'),
+    query('page')
+      .optional()
+      .isInt({ min: 1, max: MAX_PAGE })
+      .withMessage(`page must be a whole number from 1 to ${MAX_PAGE}`),
     validateRequest,
     async (req, res) => {
       const page = req.query.page ? Number(req.query.page) : 1;
@@ -36,7 +40,9 @@ export function createGithubRouter({ pool, crypto, github, repos }) {
         updatedAt: r.updated_at ?? null,
         alreadyAdded: added.has(repoKey(r.owner?.login, r.name)),
       }));
-      res.json({ items, nextPage: raw.length >= PAGE_SIZE ? page + 1 : null });
+      // No next page past the cap: the validator would reject it.
+      const hasMore = raw.length >= PAGE_SIZE && page < MAX_PAGE;
+      res.json({ items, nextPage: hasMore ? page + 1 : null });
     },
   );
 
