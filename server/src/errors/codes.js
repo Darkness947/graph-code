@@ -31,3 +31,16 @@ export const INGESTION_ERROR_CODES = Object.freeze([
   'INTERRUPTED',
   'INTERNAL',
 ]);
+
+/** User-facing message for each ingestion failure code (spec 8.9, exact wording). */
+export const INGESTION_ERROR_MESSAGES = Object.freeze({
+  DOWNLOAD_FAILED: "We couldn't download this repository from GitHub. Try again in a moment.",
+  ARCHIVE_INVALID: "This repository's archive is too large or couldn't be read safely.",
+  ARCHIVE_LIMIT_EXCEEDED: "This repository's archive is too large or couldn't be read safely.",
+  REPO_TOO_LARGE:
+    'This repository has more than 1,000 JavaScript/TypeScript files, which is above the current limit.',
+  NO_SUPPORTED_FILES: 'No JavaScript or TypeScript files were found in this repository.',
+  PERSIST_FAILED: 'Something went wrong while saving the graph. Try again.',
+  INTERRUPTED: 'Analysis was interrupted by a server restart. Try again.',
+  INTERNAL: 'Something went wrong while saving the graph. Try again.',
+});

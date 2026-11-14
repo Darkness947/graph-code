@@ -1,6 +1,6 @@
 import { AppError } from '../../errors/AppError.js';
 
-const JOB_COLUMNS = `j.id AS job_id, j.status AS job_status, j.phase AS job_phase,
+export const JOB_COLUMNS = `j.id AS job_id, j.status AS job_status, j.phase AS job_phase,
   j.files_total, j.files_processed, j.files_skipped, j.error_code, j.error_message, j.report`;
 
 /**
