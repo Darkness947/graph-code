@@ -4,6 +4,7 @@ import { createJobRepository } from '../../src/services/ingestion/jobRepository.
 import { IngestionOrchestrator, PHASES } from '../../src/services/ingestion/orchestrator.js';
 import { IngestionError } from '../../src/services/ingestion/IngestionError.js';
 import { createQueue } from '../../src/services/ingestion/queue.js';
+import { startIngestion } from '../../src/services/ingestion/startIngestion.js';
 import { INGESTION_ERROR_MESSAGES } from '../../src/errors/codes.js';
 
 describe.skipIf(!hasTestDb)(
@@ -222,6 +223,35 @@ describe.skipIf(!hasTestDb)(
     });
 
     describe('stale-job recovery on startup (AC2)', () => {
+      it('startIngestion recovers stale jobs first, then runs newly enqueued ones', async () => {
+        const staleRepo = await insertRepo('stale');
+        const staleJob = await insertJob(staleRepo, 'running');
+        const startupLogger = { log: vi.fn(), error: vi.fn() };
+        const queue = await startIngestion({
+          pool,
+          concurrency: 1,
+          steps: recordingSteps([]),
+          logger: startupLogger,
+        });
+
+        expect(queue.recovered).toBe(1);
+        expect(await jobRow(staleJob)).toMatchObject({
+          status: 'failed',
+          error_code: 'INTERRUPTED',
+        });
+        expect(await repoStatus(staleRepo)).toBe('failed');
+        expect(startupLogger.log).toHaveBeenCalledWith(
+          'Marked 1 interrupted ingestion job(s) as failed',
+        );
+
+        // The retry the user makes after the restart runs to completion.
+        const retryJob = await insertJob(staleRepo, 'queued');
+        queue.enqueue(retryJob);
+        await queue.idle();
+        expect((await jobRow(retryJob)).status).toBe('succeeded');
+        expect(await repoStatus(staleRepo)).toBe('ready');
+      });
+
       it('fails every queued or running job with INTERRUPTED and its repository; leaves others', async () => {
         const queuedRepo = await insertRepo('q');
         const queuedJob = await insertJob(queuedRepo, 'queued');

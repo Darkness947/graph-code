@@ -54,27 +54,36 @@ export class IngestionOrchestrator {
 
   /**
    * Claims the job and runs it. Returns quietly if the job is no longer queued, or stops when it
-   * stops being running (for example after startup recovery). Every failure sets the job and
-   * repository to `failed` with a spec 6.1 code.
+   * stops being running (for example after startup recovery). Every failure, including a database
+   * error outside a step, sets the job and repository to `failed` with a spec 6.1 code (7.5 step 6).
+   * Never rejects: if even recording the failure fails, it logs and startup recovery cleans up.
    * @param {string} jobId
    * @returns {Promise<void>}
    */
   async run(jobId) {
-    const job = await this.jobs.start(jobId);
-    if (!job) return;
-    /** @type {PipelineContext} */
-    const ctx = { job, jobs: this.jobs };
-    let phase = PHASES[0];
+    /** The phase whose step is running; null before the first step starts. */
+    let phase = null;
     try {
-      for (phase of PHASES) {
-        if (!(await this.jobs.setPhase(job.id, phase))) return;
+      const job = await this.jobs.start(jobId);
+      if (!job) return;
+      /** @type {PipelineContext} */
+      const ctx = { job, jobs: this.jobs };
+      for (const next of PHASES) {
+        if (!(await this.jobs.setPhase(job.id, next))) return;
+        phase = next;
         await this.steps[phase](ctx);
       }
     } catch (err) {
       const code =
         err instanceof IngestionError ? err.code : (PHASE_FAILURE_CODE[phase] ?? 'INTERNAL');
-      this.logger.error(`Ingestion job ${job.id} failed in ${phase} with ${code}: ${err?.message}`);
-      await this.jobs.fail(job.id, code);
+      this.logger.error(
+        `Ingestion job ${jobId} failed in ${phase ?? 'setup'} with ${code}: ${err?.message}`,
+      );
+      try {
+        await this.jobs.fail(jobId, code);
+      } catch (failErr) {
+        this.logger.error(`Ingestion job ${jobId}: could not record failure: ${failErr?.message}`);
+      }
     }
   }
 }

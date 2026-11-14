@@ -87,6 +87,8 @@ export function createJobRepository(pool) {
   /**
    * Marks the job `succeeded` with `finished_at` and `report`, and the repository `ready`.
    * Pass the persisting transaction's client so this commits atomically with the graph (7.5 step 5).
+   * The persisting step (T2.5) must also write `commit_sha`, `file_count`, `edge_count`,
+   * `language_summary`, `ingestion_ms` and `last_ingested_at` in that same transaction.
    * @param {string} jobId
    * @param {object} report
    * @param {import('pg').Pool | import('pg').PoolClient} [client]
