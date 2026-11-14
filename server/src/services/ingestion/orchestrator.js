@@ -1,4 +1,6 @@
+import { createFetchingStep } from './fetcher.js';
 import { IngestionError } from './IngestionError.js';
+import { createExtractingStep } from './zipExtractor.js';
 
 /**
  * @typedef {{ job: { id: string, repositoryId: string, jobType: string },
@@ -29,13 +31,26 @@ const notImplemented = (phase) => async () => {
 };
 
 /**
- * Placeholder steps until T2.3 (fetching, extracting), T2.4 (parsing, resolving) and
- * T2.5 (persisting) replace them. They fail the job with INTERNAL rather than leave it queued.
+ * Placeholder steps until T2.4 (parsing, resolving) and T2.5 (persisting) replace them. They fail
+ * the job with INTERNAL rather than leave it queued.
  * @type {PipelineSteps}
  */
 export const PLACEHOLDER_STEPS = Object.freeze(
   Object.fromEntries(PHASES.map((phase) => [phase, notImplemented(phase)])),
 );
+
+/**
+ * The real pipeline: fetching and extracting, then placeholders for the phases still to come.
+ * @param {Parameters<typeof createFetchingStep>[0] & Parameters<typeof createExtractingStep>[0]} deps
+ * @returns {PipelineSteps}
+ */
+export function createPipelineSteps({ pool, crypto, github, limits, registry }) {
+  return Object.freeze({
+    ...PLACEHOLDER_STEPS,
+    fetching: createFetchingStep({ pool, crypto, github }),
+    extracting: createExtractingStep({ limits, registry }),
+  });
+}
 
 /**
  * Runs one ingestion job through the five phases in order (spec 7.5). The persisting step must
