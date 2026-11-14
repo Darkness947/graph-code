@@ -155,7 +155,13 @@ export function createRepositoryService(pool) {
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
       // The one-active-job index fired: another request won the race.
-      if (err?.code === '23505') throw jobActive(null);
+      if (err?.code === '23505' && err.constraint === 'one_active_job_per_repo') {
+        const { rows } = await pool.query(
+          `SELECT id FROM ingestion_jobs WHERE repository_id = $1 AND status IN ('queued', 'running')`,
+          [repoId],
+        );
+        throw jobActive(rows[0]?.id ?? null);
+      }
       throw err;
     } finally {
       client.release();

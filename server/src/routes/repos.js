@@ -5,6 +5,8 @@ import {
   repoInputBody,
   uuidParam,
   validateRequest,
+  createValidateRequest,
+  REPO_INPUT_MESSAGE,
   parseRepoInput,
 } from '../middleware/validate.js';
 import { requireUserToken } from '../services/auth/tokenCrypto.js';
@@ -26,7 +28,7 @@ export function createReposRouter({ pool, crypto, github, enqueue, addRepoLimit,
     '/',
     createLimiter(addRepoLimit),
     repoInputBody(),
-    validateRequest,
+    createValidateRequest(REPO_INPUT_MESSAGE),
     async (req, res) => {
       const { owner, name } = parseRepoInput(req.body.repo);
       const token = await requireUserToken(pool, crypto, req.user.id);

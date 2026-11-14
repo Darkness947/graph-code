@@ -61,18 +61,25 @@ export const repoInputBody = () =>
     .withMessage('repo must be owner/name or a https://github.com/owner/name URL');
 
 /**
- * Runs after the express-validator chains. Turns failures into VALIDATION_ERROR (spec 6.1),
- * listing the failing fields. Submitted values are never echoed back.
- * @type {import('express').RequestHandler}
+ * Builds the handler that runs after the express-validator chains. Failures become
+ * VALIDATION_ERROR (spec 6.1) listing the failing fields; submitted values are never echoed back.
+ * @param {string} [message] user-safe message (spec 8.9 wording where one is defined)
+ * @returns {import('express').RequestHandler}
  */
-export function validateRequest(req, res, next) {
-  const result = validationResult(req);
-  if (result.isEmpty()) return next();
-  const details = result.array().map((e) => ({
-    field: e.type === 'field' ? e.path : e.type,
-    message: String(e.msg),
-  }));
-  next(
-    new AppError('VALIDATION_ERROR', 'Some of the information provided is not valid.', { details }),
-  );
+export function createValidateRequest(message = 'Some of the information provided is not valid.') {
+  return (req, res, next) => {
+    const result = validationResult(req);
+    if (result.isEmpty()) return next();
+    const details = result.array().map((e) => ({
+      field: e.type === 'field' ? e.path : e.type,
+      message: String(e.msg),
+    }));
+    next(new AppError('VALIDATION_ERROR', message, { details }));
+  };
 }
+
+/** Default handler: generic VALIDATION_ERROR message. */
+export const validateRequest = createValidateRequest();
+
+/** Spec 8.9 wording for an invalid repository input. */
+export const REPO_INPUT_MESSAGE = 'Enter a repository as owner/name or a github.com link.';

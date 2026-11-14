@@ -30,9 +30,13 @@ export function createLimiter({ windowMs, limit }) {
         ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
         : Math.ceil(windowMs / 1000);
       next(
-        new AppError('RATE_LIMITED', 'Too many requests. Please wait a moment and try again.', {
-          retryAfterSeconds,
-        }),
+        new AppError(
+          'RATE_LIMITED',
+          `You're doing that too often. Try again in ${retryAfterSeconds} seconds.`,
+          {
+            retryAfterSeconds,
+          },
+        ),
       );
     },
   });

@@ -116,10 +116,6 @@ describe('rate limiting', () => {
     expect(ADD_REPO_LIMIT).toEqual({ windowMs: 10 * 60 * 1000, limit: 5 });
   });
 
-  it('allows 5 repository additions per 10 minutes (spec 7.1)', () => {
-    expect(ADD_REPO_LIMIT).toEqual({ windowMs: 10 * 60 * 1000, limit: 5 });
-  });
-
   it('keys by user ID when signed in, otherwise by IP', () => {
     expect(rateLimitKey({ session: { userId: 'u-1' }, ip: '1.2.3.4' })).toBe('user:u-1');
     expect(rateLimitKey({ session: {}, ip: '1.2.3.4' })).toBe('ip:1.2.3.4');

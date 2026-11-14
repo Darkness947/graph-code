@@ -126,6 +126,9 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
         const res = await post(cookieA, repo);
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('VALIDATION_ERROR');
+        expect(res.body.error.message).toBe(
+          'Enter a repository as owner/name or a github.com link.',
+        );
         expect(github.getRepository).not.toHaveBeenCalled();
       },
     );
@@ -216,6 +219,9 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
       expect(res.status).toBe(429);
       expect(res.body.error.code).toBe('RATE_LIMITED');
       expect(res.body.error.retryAfterSeconds).toBeGreaterThan(0);
+      expect(res.body.error.message).toMatch(
+        /^You're doing that too often\. Try again in \d+ seconds\.$/,
+      );
     });
   });
 
