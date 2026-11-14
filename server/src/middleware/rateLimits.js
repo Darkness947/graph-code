@@ -30,9 +30,13 @@ export function createLimiter({ windowMs, limit }) {
         ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
         : Math.ceil(windowMs / 1000);
       next(
-        new AppError('RATE_LIMITED', 'Too many requests. Please wait a moment and try again.', {
-          retryAfterSeconds,
-        }),
+        new AppError(
+          'RATE_LIMITED',
+          `You're doing that too often. Try again in ${retryAfterSeconds} seconds.`,
+          {
+            retryAfterSeconds,
+          },
+        ),
       );
     },
   });
@@ -40,3 +44,6 @@ export function createLimiter({ windowMs, limit }) {
 
 /** All `/api` routes: 300 requests per 15 minutes (spec 7.1). */
 export const GLOBAL_LIMIT = { windowMs: 15 * 60 * 1000, limit: 300 };
+
+/** `POST /api/repos`: 5 requests per 10 minutes (spec 7.1). */
+export const ADD_REPO_LIMIT = { windowMs: 10 * 60 * 1000, limit: 5 };

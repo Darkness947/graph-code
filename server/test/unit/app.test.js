@@ -9,7 +9,7 @@ import { validateRequest, uuidParam, repoInputBody } from '../../src/middleware/
 import { AppError } from '../../src/errors/AppError.js';
 import { ERROR_STATUS } from '../../src/errors/codes.js';
 import { cookieOptions } from '../../src/middleware/session.js';
-import { rateLimitKey, GLOBAL_LIMIT } from '../../src/middleware/rateLimits.js';
+import { rateLimitKey, GLOBAL_LIMIT, ADD_REPO_LIMIT } from '../../src/middleware/rateLimits.js';
 
 const config = {
   NODE_ENV: 'test',
@@ -110,6 +110,10 @@ describe('session cookie options', () => {
 describe('rate limiting', () => {
   it('is 300 requests per 15 minutes on /api (spec 7.1)', () => {
     expect(GLOBAL_LIMIT).toEqual({ windowMs: 15 * 60 * 1000, limit: 300 });
+  });
+
+  it('allows 5 repository additions per 10 minutes (spec 7.1)', () => {
+    expect(ADD_REPO_LIMIT).toEqual({ windowMs: 10 * 60 * 1000, limit: 5 });
   });
 
   it('keys by user ID when signed in, otherwise by IP', () => {
