@@ -40,3 +40,6 @@ export function createLimiter({ windowMs, limit }) {
 
 /** All `/api` routes: 300 requests per 15 minutes (spec 7.1). */
 export const GLOBAL_LIMIT = { windowMs: 15 * 60 * 1000, limit: 300 };
+
+/** `POST /api/repos`: 5 requests per 10 minutes (spec 7.1). */
+export const ADD_REPO_LIMIT = { windowMs: 10 * 60 * 1000, limit: 5 };
