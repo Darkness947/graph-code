@@ -114,6 +114,9 @@ export function createJobRepository(pool) {
    * @returns {Promise<boolean>} false when the job was not queued or running
    */
   async function fail(jobId, code) {
+    if (!Object.hasOwn(INGESTION_ERROR_MESSAGES, code)) {
+      throw new Error(`Unknown ingestion code: ${code}`);
+    }
     const res = await pool.query(
       `WITH j AS (
          UPDATE ingestion_jobs SET status = 'failed', error_code = $2, error_message = $3,

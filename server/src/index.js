@@ -22,7 +22,13 @@ try {
 
 const pool = createPool(config.DATABASE_URL);
 // Recovery (spec 7.5) finishes before the server accepts requests.
-const queue = await startIngestion({ pool, concurrency: config.INGEST_CONCURRENCY });
+let queue;
+try {
+  queue = await startIngestion({ pool, concurrency: config.INGEST_CONCURRENCY });
+} catch (err) {
+  console.error(`Startup failed: could not recover ingestion jobs (${err.message})`);
+  process.exit(1);
+}
 
 createApp(config, { pool, enqueue: queue.enqueue }).listen(config.PORT, () => {
   console.log(`Graph Code server listening on port ${config.PORT}`);

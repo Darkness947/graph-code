@@ -69,9 +69,15 @@ export class IngestionOrchestrator {
       /** @type {PipelineContext} */
       const ctx = { job, jobs: this.jobs };
       for (const next of PHASES) {
+        // Outside a step, a database error is INTERNAL, never the previous phase's code.
+        phase = null;
         if (!(await this.jobs.setPhase(job.id, next))) return;
         phase = next;
         await this.steps[phase](ctx);
+      }
+      // A no-op once persisting has marked the job succeeded; otherwise it never would end.
+      if (await this.jobs.fail(job.id, 'INTERNAL')) {
+        this.logger.error(`Ingestion job ${job.id}: persisting finished without marking success`);
       }
     } catch (err) {
       const code =
