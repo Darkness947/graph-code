@@ -42,7 +42,8 @@ export async function resetTestDatabase() {
     }
   }
   const pool = createPool(url);
-  await pool.query('DROP SCHEMA public CASCADE');
+  // IF EXISTS: an earlier run killed between DROP and CREATE must not wedge every later run.
+  await pool.query('DROP SCHEMA IF EXISTS public CASCADE');
   await pool.query('CREATE SCHEMA public');
   await runMigrations(pool);
   return pool;
