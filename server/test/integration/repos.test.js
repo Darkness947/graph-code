@@ -294,6 +294,59 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
     });
   });
 
+  describe('GET /api/jobs/:jobId', () => {
+    it('returns the Job object for the owner', async () => {
+      const added = await post(cookieA, 'a/b');
+      const res = await request(app).get(`/api/jobs/${added.body.job.id}`).set('Cookie', cookieA);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        id: added.body.job.id,
+        status: 'queued',
+        phase: null,
+        filesTotal: null,
+        filesProcessed: 0,
+        filesSkipped: 0,
+        errorCode: null,
+        errorMessage: null,
+        report: null,
+      });
+    });
+
+    it('reflects a failed job with its code and message', async () => {
+      const added = await post(cookieA, 'a/b');
+      await pool.query(
+        `UPDATE ingestion_jobs SET status = 'failed', error_code = 'INTERRUPTED',
+           error_message = 'Analysis was interrupted by a server restart. Try again.' WHERE id = $1`,
+        [added.body.job.id],
+      );
+      const res = await request(app).get(`/api/jobs/${added.body.job.id}`).set('Cookie', cookieA);
+      expect(res.body).toMatchObject({
+        status: 'failed',
+        errorCode: 'INTERRUPTED',
+        errorMessage: 'Analysis was interrupted by a server restart. Try again.',
+      });
+    });
+
+    it('ownership: user B gets 404 NOT_FOUND on user A job', async () => {
+      const added = await post(cookieA, 'a/b');
+      const res = await request(app).get(`/api/jobs/${added.body.job.id}`).set('Cookie', cookieB);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('404 for an unknown id, 400 for a non-UUID id, 401 without a session', async () => {
+      const unknown = await request(app)
+        .get('/api/jobs/00000000-0000-4000-8000-000000000000')
+        .set('Cookie', cookieA);
+      expect(unknown.status).toBe(404);
+      const bad = await request(app).get('/api/jobs/not-a-uuid').set('Cookie', cookieA);
+      expect(bad.status).toBe(400);
+      expect(bad.body.error.code).toBe('VALIDATION_ERROR');
+      const anon = await request(app).get('/api/jobs/00000000-0000-4000-8000-000000000000');
+      expect(anon.status).toBe(401);
+    });
+  });
+
   describe('GET /api/github/repos', () => {
     const raw = (name, owner = 'Darkness947') => ({
       owner: { login: owner },

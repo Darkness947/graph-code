@@ -13,6 +13,8 @@ import { createGithubRouter } from './routes/github.js';
 import { createReposRouter } from './routes/repos.js';
 import { createGithubClient } from './services/github/githubClient.js';
 import { createRepositoryService } from './services/repos/repositoryService.js';
+import { createJobRepository } from './services/ingestion/jobRepository.js';
+import { createJobsRouter } from './routes/jobs.js';
 
 /**
  * Builds the Express app (exported for Supertest). Routes are added by later tasks.
@@ -21,7 +23,8 @@ import { createRepositoryService } from './services/repos/repositoryService.js';
  * @param {{ globalLimit?: { windowMs: number, limit: number }, pool?: import('pg').Pool,
  *   oauth?: ReturnType<typeof createGithubOAuth>,
  *   crypto?: ReturnType<typeof tokenCryptoFromConfig>, github?: ReturnType<typeof createGithubClient>,
- *   enqueue?: (jobId: string) => void, addRepoLimit?: { windowMs: number, limit: number } }} [options] pool and test overrides
+ *   enqueue?: (jobId: string) => void, addRepoLimit?: { windowMs: number, limit: number },
+ *   jobs?: ReturnType<typeof createJobRepository> }} [options] pool and test overrides
  * @returns {import('express').Express}
  */
 export function createApp(config, options = {}) {
@@ -44,7 +47,8 @@ export function createApp(config, options = {}) {
 
     const github = options.github ?? createGithubClient({ maxZipBytes: config.MAX_ZIP_BYTES });
     const repos = createRepositoryService(pool);
-    // The queue arrives in T2.2; until then jobs stay queued.
+    const jobs = options.jobs ?? createJobRepository(pool);
+    // index.js passes the real queue; tests that omit it leave jobs queued.
     const enqueue = options.enqueue ?? (() => {});
     const addRepoLimit = options.addRepoLimit ?? ADD_REPO_LIMIT;
     api.use('/github', requireAuth, createGithubRouter({ pool, crypto, github, repos }));
@@ -53,6 +57,7 @@ export function createApp(config, options = {}) {
       requireAuth,
       createReposRouter({ pool, crypto, github, enqueue, addRepoLimit, repos }),
     );
+    api.use('/jobs', requireAuth, createJobsRouter({ jobs }));
   }
   app.use('/api', api);
 
