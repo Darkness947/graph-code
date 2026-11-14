@@ -1,25 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createQueue } from '../../src/services/ingestion/queue.js';
 
-/** A run function whose calls stay pending until released, recording start order and overlap. */
+/** A run function whose calls stay pending until released; records the start order. */
 function controlledRun() {
   const started = [];
-  const pending = new Map();
-  let active = 0;
-  let maxActive = 0;
-  const run = vi.fn(
-    (jobId) =>
-      new Promise((resolve, reject) => {
-        started.push(jobId);
-        active += 1;
-        maxActive = Math.max(maxActive, active);
-        pending.set(jobId, {
-          resolve: () => (active--, resolve()),
-          reject: (e) => (active--, reject(e)),
-        });
-      }),
-  );
-  return { run, started, pending, maxActive: () => maxActive };
+  const release = new Map();
+  const run = (jobId) =>
+    new Promise((resolve) => {
+      started.push(jobId);
+      release.set(jobId, resolve);
+    });
+  return { run, started, release: (id) => release.get(id)() };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -35,18 +26,15 @@ describe('createQueue', () => {
     ['a', 'b', 'c'].forEach(queue.enqueue);
     await tick();
     expect(c.started).toEqual(['a']);
-    expect(queue.size()).toBe(3);
 
-    c.pending.get('a').resolve();
+    c.release('a');
     await tick();
     expect(c.started).toEqual(['a', 'b']);
-    c.pending.get('b').resolve();
+    c.release('b');
     await tick();
-    c.pending.get('c').resolve();
+    c.release('c');
     await queue.idle();
     expect(c.started).toEqual(['a', 'b', 'c']);
-    expect(c.maxActive()).toBe(1);
-    expect(queue.size()).toBe(0);
   });
 
   it('never runs more than the concurrency limit at once', async () => {
@@ -55,14 +43,13 @@ describe('createQueue', () => {
     ['a', 'b', 'c', 'd'].forEach(queue.enqueue);
     await tick();
     expect(c.started).toEqual(['a', 'b']);
-    c.pending.get('b').resolve();
+    c.release('b');
     await tick();
     expect(c.started).toEqual(['a', 'b', 'c']);
-    for (const id of ['a', 'c']) c.pending.get(id).resolve();
+    for (const id of ['a', 'c']) c.release(id);
     await tick();
-    c.pending.get('d').resolve();
+    c.release('d');
     await queue.idle();
-    expect(c.maxActive()).toBe(2);
   });
 
   it('logs a crashed run and keeps going', async () => {

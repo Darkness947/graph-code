@@ -3,7 +3,7 @@
  * is the source of truth, so nothing is persisted here; a restart is handled by startup recovery.
  * @param {{ concurrency: number, run: (jobId: string) => Promise<void>,
  *   logger?: Pick<Console, 'error'> }} options
- * @returns {{ enqueue: (jobId: string) => void, idle: () => Promise<void>, size: () => number }}
+ * @returns {{ enqueue: (jobId: string) => void, idle: () => Promise<void> }}
  */
 export function createQueue({ concurrency, run, logger = console }) {
   if (!Number.isInteger(concurrency) || concurrency < 1) {
@@ -45,14 +45,12 @@ export function createQueue({ concurrency, run, logger = console }) {
       waiting.push(jobId);
       pump();
     },
-    /** Resolves when nothing is running or waiting (used by tests and shutdown). */
+    /** Resolves when nothing is running or waiting. */
     idle() {
       return new Promise((resolve) => {
         idleWaiters.push(resolve);
         settleIdle();
       });
     },
-    /** Jobs running plus waiting. */
-    size: () => active + waiting.length,
   };
 }

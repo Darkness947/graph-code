@@ -23,8 +23,7 @@ import { createJobsRouter } from './routes/jobs.js';
  * @param {{ globalLimit?: { windowMs: number, limit: number }, pool?: import('pg').Pool,
  *   oauth?: ReturnType<typeof createGithubOAuth>,
  *   crypto?: ReturnType<typeof tokenCryptoFromConfig>, github?: ReturnType<typeof createGithubClient>,
- *   enqueue?: (jobId: string) => void, addRepoLimit?: { windowMs: number, limit: number },
- *   jobs?: ReturnType<typeof createJobRepository> }} [options] pool and test overrides
+ *   enqueue?: (jobId: string) => void, addRepoLimit?: { windowMs: number, limit: number } }} [options] pool and test overrides
  * @returns {import('express').Express}
  */
 export function createApp(config, options = {}) {
@@ -47,7 +46,7 @@ export function createApp(config, options = {}) {
 
     const github = options.github ?? createGithubClient({ maxZipBytes: config.MAX_ZIP_BYTES });
     const repos = createRepositoryService(pool);
-    const jobs = options.jobs ?? createJobRepository(pool);
+    const jobs = createJobRepository(pool);
     // index.js passes the real queue; tests that omit it leave jobs queued.
     const enqueue = options.enqueue ?? (() => {});
     const addRepoLimit = options.addRepoLimit ?? ADD_REPO_LIMIT;

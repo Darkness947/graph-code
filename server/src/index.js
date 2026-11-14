@@ -35,6 +35,6 @@ const queue = createQueue({
   run: (jobId) => orchestrator.run(jobId),
 });
 
-createApp(config, { pool, jobs, enqueue: queue.enqueue }).listen(config.PORT, () => {
+createApp(config, { pool, enqueue: queue.enqueue }).listen(config.PORT, () => {
   console.log(`Graph Code server listening on port ${config.PORT}`);
 });

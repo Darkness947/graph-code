@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { hasTestDb, resetTestDatabase } from '../helpers/db.js';
-import { createJobRepository, PHASES } from '../../src/services/ingestion/jobRepository.js';
-import { IngestionOrchestrator } from '../../src/services/ingestion/orchestrator.js';
+import { createJobRepository } from '../../src/services/ingestion/jobRepository.js';
+import { IngestionOrchestrator, PHASES } from '../../src/services/ingestion/orchestrator.js';
 import { IngestionError } from '../../src/services/ingestion/IngestionError.js';
 import { createQueue } from '../../src/services/ingestion/queue.js';
 import { INGESTION_ERROR_MESSAGES } from '../../src/errors/codes.js';
@@ -45,14 +45,7 @@ describe.skipIf(!hasTestDb)(
           log.push({ step: phase, status: row.status, phase: row.phase });
           if (overrides[phase]) return overrides[phase](ctx);
           if (phase === 'persisting') {
-            const client = await pool.connect();
-            try {
-              await client.query('BEGIN');
-              await ctx.jobs.succeed(ctx.job.id, { skippedFiles: [], unresolvedCount: 0 }, client);
-              await client.query('COMMIT');
-            } finally {
-              client.release();
-            }
+            await ctx.jobs.succeed(ctx.job.id, { skippedFiles: [], unresolvedCount: 0 });
           }
         };
       }

@@ -1,70 +1,63 @@
 import { INGESTION_ERROR_MESSAGES } from '../../errors/codes.js';
 import { AppError } from '../../errors/AppError.js';
-import { JOB_COLUMNS, mapJob } from '../repos/repositoryService.js';
 
-/** Pipeline phases in order (spec 5.2 `ingestion_jobs.phase`, 7.5). */
-export const PHASES = Object.freeze([
-  'fetching',
-  'extracting',
-  'parsing',
-  'resolving',
-  'persisting',
-]);
+/** Job columns for a query that aliases `ingestion_jobs` as `j`, in the shape `mapJob` reads. */
+export const JOB_COLUMNS = `j.id AS job_id, j.status AS job_status, j.phase AS job_phase,
+  j.files_total, j.files_processed, j.files_skipped, j.error_code, j.error_message, j.report`;
 
 /**
- * Runs `fn` inside one transaction on a dedicated client.
- * @template T
- * @param {import('pg').Pool} pool
- * @param {(client: import('pg').PoolClient) => Promise<T>} fn
- * @returns {Promise<T>}
+ * Maps a row selected with JOB_COLUMNS to the Job object (spec 6.2).
+ * @param {Record<string, any>} row
+ * @returns {object | null} null when the row has no job
  */
-async function inTransaction(pool, fn) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await fn(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+export function mapJob(row) {
+  if (!row.job_id) return null;
+  return {
+    id: row.job_id,
+    status: row.job_status,
+    phase: row.job_phase,
+    filesTotal: row.files_total,
+    filesProcessed: row.files_processed,
+    filesSkipped: row.files_skipped,
+    errorCode: row.error_code,
+    errorMessage: row.error_message,
+    report: row.report,
+  };
 }
 
 /**
  * Ingestion job state (spec 5.2, 7.5). The job row is the source of truth: every transition is
- * guarded by the current status, so a job that was recovered, finished or deleted is never revived.
+ * guarded by the current status, so a job that was recovered, finished or deleted is never
+ * revived. Each transition that also moves the repository is one statement (a data-modifying
+ * CTE), so the pair is atomic without a transaction.
  * @param {import('pg').Pool} pool
  */
 export function createJobRepository(pool) {
   /**
-   * Claims a queued job: job `running` in phase `fetching` with `started_at`, repository `analyzing`.
+   * Claims a queued job: job `running` with `started_at`, repository `analyzing`.
    * @param {string} jobId
    * @returns {Promise<{ id: string, repositoryId: string, jobType: string } | null>} null when
    *   the job is missing or no longer queued
    */
-  function start(jobId) {
-    return inTransaction(pool, async (client) => {
-      const { rows } = await client.query(
-        `UPDATE ingestion_jobs SET status = 'running', phase = 'fetching', started_at = now()
+  async function start(jobId) {
+    const { rows } = await pool.query(
+      `WITH j AS (
+         UPDATE ingestion_jobs SET status = 'running', started_at = now()
          WHERE id = $1 AND status = 'queued'
-         RETURNING id, repository_id, job_type`,
-        [jobId],
-      );
-      if (rows.length === 0) return null;
-      const job = rows[0];
-      await client.query(`UPDATE repositories SET status = 'analyzing' WHERE id = $1`, [
-        job.repository_id,
-      ]);
-      return { id: job.id, repositoryId: job.repository_id, jobType: job.job_type };
-    });
+         RETURNING id, repository_id, job_type
+       ), r AS (
+         UPDATE repositories SET status = 'analyzing' FROM j WHERE repositories.id = j.repository_id
+       )
+       SELECT id, repository_id, job_type FROM j`,
+      [jobId],
+    );
+    if (rows.length === 0) return null;
+    return { id: rows[0].id, repositoryId: rows[0].repository_id, jobType: rows[0].job_type };
   }
 
   /**
    * @param {string} jobId
-   * @param {string} phase one of PHASES
+   * @param {string} phase a phase from spec 5.2
    * @returns {Promise<boolean>} false when the job is no longer running
    */
   async function setPhase(jobId, phase) {
@@ -100,62 +93,57 @@ export function createJobRepository(pool) {
    * @returns {Promise<boolean>} false when the job is no longer running (the caller rolls back)
    */
   async function succeed(jobId, report, client = pool) {
-    const { rows } = await client.query(
-      `UPDATE ingestion_jobs SET status = 'succeeded', finished_at = now(), report = $2
-       WHERE id = $1 AND status = 'running'
-       RETURNING repository_id`,
+    const res = await client.query(
+      `WITH j AS (
+         UPDATE ingestion_jobs SET status = 'succeeded', finished_at = now(), report = $2
+         WHERE id = $1 AND status = 'running'
+         RETURNING repository_id
+       )
+       UPDATE repositories SET status = 'ready' FROM j WHERE repositories.id = j.repository_id`,
       [jobId, report],
     );
-    if (rows.length === 0) return false;
-    await client.query(`UPDATE repositories SET status = 'ready' WHERE id = $1`, [
-      rows[0].repository_id,
-    ]);
-    return true;
+    return res.rowCount > 0;
   }
 
   /**
    * Fails an active job with its code and the spec 8.9 message; the repository becomes `failed`.
    * @param {string} jobId
-   * @param {string} code one of the ingestion codes (spec 6.1)
+   * @param {keyof typeof INGESTION_ERROR_MESSAGES} code an ingestion code (spec 6.1)
    * @returns {Promise<boolean>} false when the job was not queued or running
    */
-  function fail(jobId, code) {
-    return inTransaction(pool, async (client) => {
-      const { rows } = await client.query(
-        `UPDATE ingestion_jobs SET status = 'failed', error_code = $2, error_message = $3, finished_at = now()
+  async function fail(jobId, code) {
+    const res = await pool.query(
+      `WITH j AS (
+         UPDATE ingestion_jobs SET status = 'failed', error_code = $2, error_message = $3,
+           finished_at = now()
          WHERE id = $1 AND status IN ('queued', 'running')
-         RETURNING repository_id`,
-        [jobId, code, INGESTION_ERROR_MESSAGES[code]],
-      );
-      if (rows.length === 0) return false;
-      await client.query(`UPDATE repositories SET status = 'failed' WHERE id = $1`, [
-        rows[0].repository_id,
-      ]);
-      return true;
-    });
+         RETURNING repository_id
+       )
+       UPDATE repositories SET status = 'failed' FROM j WHERE repositories.id = j.repository_id`,
+      [jobId, code, INGESTION_ERROR_MESSAGES[code]],
+    );
+    return res.rowCount > 0;
   }
 
   /**
    * Startup recovery (spec 7.5 Queue): every queued or running job fails with INTERRUPTED and
-   * its repository becomes `failed`, in one transaction.
+   * its repository becomes `failed`, in one statement.
    * @returns {Promise<number>} the number of jobs recovered
    */
-  function recoverStale() {
-    return inTransaction(pool, async (client) => {
-      const { rows } = await client.query(
-        `UPDATE ingestion_jobs SET status = 'failed', error_code = 'INTERRUPTED', error_message = $1,
+  async function recoverStale() {
+    const { rows } = await pool.query(
+      `WITH j AS (
+         UPDATE ingestion_jobs SET status = 'failed', error_code = 'INTERRUPTED', error_message = $1,
            finished_at = now()
          WHERE status IN ('queued', 'running')
-         RETURNING repository_id`,
-        [INGESTION_ERROR_MESSAGES.INTERRUPTED],
-      );
-      if (rows.length > 0) {
-        await client.query(`UPDATE repositories SET status = 'failed' WHERE id = ANY($1::uuid[])`, [
-          rows.map((r) => r.repository_id),
-        ]);
-      }
-      return rows.length;
-    });
+         RETURNING repository_id
+       ), r AS (
+         UPDATE repositories SET status = 'failed' FROM j WHERE repositories.id = j.repository_id
+       )
+       SELECT count(*)::int AS n FROM j`,
+      [INGESTION_ERROR_MESSAGES.INTERRUPTED],
+    );
+    return rows[0].n;
   }
 
   /**

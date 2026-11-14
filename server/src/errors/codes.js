@@ -20,19 +20,10 @@ export const ERROR_STATUS = Object.freeze({
   INTERNAL: 500,
 });
 
-/** Ingestion failure codes, reported on the job (spec 6.1), not as HTTP errors. */
-export const INGESTION_ERROR_CODES = Object.freeze([
-  'DOWNLOAD_FAILED',
-  'ARCHIVE_INVALID',
-  'ARCHIVE_LIMIT_EXCEEDED',
-  'REPO_TOO_LARGE',
-  'NO_SUPPORTED_FILES',
-  'PERSIST_FAILED',
-  'INTERRUPTED',
-  'INTERNAL',
-]);
-
-/** User-facing message for each ingestion failure code (spec 8.9, exact wording). */
+/**
+ * Ingestion failure codes, reported on the job (spec 6.1) rather than as HTTP errors, each with
+ * its user-facing message (spec 8.9, exact wording).
+ */
 export const INGESTION_ERROR_MESSAGES = Object.freeze({
   DOWNLOAD_FAILED: "We couldn't download this repository from GitHub. Try again in a moment.",
   ARCHIVE_INVALID: "This repository's archive is too large or couldn't be read safely.",
@@ -44,3 +35,6 @@ export const INGESTION_ERROR_MESSAGES = Object.freeze({
   INTERRUPTED: 'Analysis was interrupted by a server restart. Try again.',
   INTERNAL: 'Something went wrong while saving the graph. Try again.',
 });
+
+/** Ingestion failure codes (spec 6.1). */
+export const INGESTION_ERROR_CODES = Object.freeze(Object.keys(INGESTION_ERROR_MESSAGES));
