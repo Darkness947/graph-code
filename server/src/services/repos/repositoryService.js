@@ -1,27 +1,5 @@
 import { AppError } from '../../errors/AppError.js';
-
-const JOB_COLUMNS = `j.id AS job_id, j.status AS job_status, j.phase AS job_phase,
-  j.files_total, j.files_processed, j.files_skipped, j.error_code, j.error_message, j.report`;
-
-/**
- * Maps a joined row (job columns aliased by JOB_COLUMNS) to the Job object (spec 6.2).
- * @param {Record<string, any>} row
- * @returns {object | null} null when the row has no job
- */
-export function mapJob(row) {
-  if (!row.job_id) return null;
-  return {
-    id: row.job_id,
-    status: row.job_status,
-    phase: row.job_phase,
-    filesTotal: row.files_total,
-    filesProcessed: row.files_processed,
-    filesSkipped: row.files_skipped,
-    errorCode: row.error_code,
-    errorMessage: row.error_message,
-    report: row.report,
-  };
-}
+import { JOB_COLUMNS, mapJob } from '../ingestion/jobRepository.js';
 
 /**
  * Maps a repository row (with joined latest-job columns) to the Repository object (spec 6.2).

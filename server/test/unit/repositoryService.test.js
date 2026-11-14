@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { mapRepository, mapJob } from '../../src/services/repos/repositoryService.js';
+import { mapRepository } from '../../src/services/repos/repositoryService.js';
+import { mapJob } from '../../src/services/ingestion/jobRepository.js';
 
 const row = {
   id: 'r1',
