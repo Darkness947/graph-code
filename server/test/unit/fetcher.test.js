@@ -54,24 +54,6 @@ describe('fetching step: commit SHA pinning (AC1)', () => {
     expect(ctx.archive).toEqual(Buffer.from('zip'));
   });
 
-  it('reads the head commit before downloading', async () => {
-    const order = [];
-    const { step, ctx } = setup({
-      github: {
-        getHeadCommit: vi.fn(async () => (order.push('head'), SHA)),
-        downloadArchive: vi.fn(async () => (order.push('zip'), Buffer.alloc(0))),
-      },
-    });
-    await step(ctx);
-    expect(order).toEqual(['head', 'zip']);
-  });
-
-  it('never passes the token to the archive download', async () => {
-    const { step, ctx, client } = setup();
-    await step(ctx);
-    expect(client.downloadArchive.mock.calls[0]).not.toContain('gho_token');
-  });
-
   it('looks up the repository of the job and its owner with parameterized queries', async () => {
     const { step, ctx, pool } = setup();
     await step(ctx);

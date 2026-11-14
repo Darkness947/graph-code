@@ -230,7 +230,7 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
         responseType: 'arraybuffer',
         maxContentLength: maxZipBytes,
       });
-      return Buffer.from(data);
+      return Buffer.isBuffer(data) ? data : Buffer.from(data);
     },
 
     /** @returns {Promise<string>} raw file text (`TOO_LARGE` reason when over 1 MB) */

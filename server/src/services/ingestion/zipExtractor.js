@@ -48,12 +48,13 @@ export function repositoryPath(entryName) {
  * Classifies a repository-relative path without looking at its content (spec 7.5 step 2).
  * @param {string} path
  * @param {ReturnType<typeof createDefaultRegistry>} registry
+ * @param {Set<string>} configNames the registry's configuration file names
  * @returns {'source' | 'config' | 'skip'}
  */
-export function classifyPath(path, registry) {
+function classifyPath(path, registry, configNames) {
   const segments = path.split('/');
   const fileName = segments.pop();
-  if (segments.length === 0 && registry.configFileNames().includes(fileName)) return 'config';
+  if (segments.length === 0 && configNames.has(fileName)) return 'config';
   if (segments.some((dir) => SKIPPED_DIRECTORIES.has(dir))) return 'skip';
   if (TEST_FILE_RE.test(fileName) || fileName.endsWith('.d.ts')) return 'skip';
   return registry.pluginForPath(path) ? 'source' : 'skip';
@@ -84,8 +85,10 @@ export async function extractArchive(buffer, { limits, registry = createDefaultR
     let totalBytes = 0;
     /** Kept paths: two entries for one path would become two nodes for one file. */
     const seen = new Set();
+    const configNames = new Set(registry.configFileNames());
 
-    for (let entry; (entry = await nextEntry(zip));) {
+    let entry;
+    while ((entry = await nextEntry(zip)) !== null) {
       // Also true for a non-empty entry that claims zero compressed bytes.
       if (entry.uncompressedSize > entry.compressedSize * limits.maxCompressionRatio) {
         throw new IngestionError(
@@ -95,7 +98,7 @@ export async function extractArchive(buffer, { limits, registry = createDefaultR
       }
       const path = repositoryPath(entry.fileName);
       if (path === null) continue;
-      const kind = classifyPath(path, registry);
+      const kind = classifyPath(path, registry, configNames);
       if (kind === 'skip') continue;
       if (seen.has(path)) {
         throw new IngestionError('ARCHIVE_INVALID', 'two entries have the same path');
@@ -174,7 +177,9 @@ function inflate(zip, entry, budget) {
         chunks.push(chunk);
       });
       stream.on('error', reject);
-      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('end', () =>
+        resolve(chunks.length === 1 ? chunks[0] : Buffer.concat(chunks, size)),
+      );
     });
   });
 }
@@ -183,18 +188,18 @@ function inflate(zip, entry, budget) {
  * The extracting step (spec 7.5 step 2). Leaves `ctx.files`, `ctx.configFiles` and `ctx.skipped`,
  * sets `files_total`, and drops the archive so it can be garbage-collected.
  * @param {{ limits: import('./limits.js').IngestionLimits,
- *   registry?: ReturnType<typeof createDefaultRegistry> }} deps
+ *   registry: ReturnType<typeof createDefaultRegistry> }} deps
  * @returns {import('./orchestrator.js').PipelineStep}
  */
 export function createExtractingStep({ limits, registry }) {
   return async function extracting(ctx) {
     const archive = ctx.archive;
     ctx.archive = undefined;
-    const { files, configFiles, skipped } = await extractArchive(archive, { limits, registry });
-    Object.assign(ctx, { files, configFiles, skipped });
+    const result = await extractArchive(archive, { limits, registry });
+    Object.assign(ctx, result);
     await ctx.jobs.updateCounts(ctx.job.id, {
-      filesTotal: files.length,
-      filesSkipped: skipped.length,
+      filesTotal: result.files.length,
+      filesSkipped: result.skipped.length,
     });
   };
 }

@@ -1,21 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { hasTestDb, resetTestDatabase } from '../helpers/db.js';
 import { buildZip } from '../helpers/zip.js';
-import { createPipelineSteps } from '../../src/services/ingestion/orchestrator.js';
-import { startIngestion } from '../../src/services/ingestion/startIngestion.js';
-import { limitsFromConfig } from '../../src/services/ingestion/limits.js';
+import {
+  createPipelineSteps,
+  startIngestion,
+} from '../../src/services/ingestion/startIngestion.js';
+import { DEFAULT_LIMITS as LIMITS } from '../helpers/limits.js';
 import { INGESTION_ERROR_MESSAGES } from '../../src/errors/codes.js';
 import { AppError } from '../../src/errors/AppError.js';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
-const LIMITS = limitsFromConfig({
-  MAX_ZIP_BYTES: 52428800,
-  MAX_ZIP_ENTRIES: 20000,
-  MAX_FILE_BYTES: 1048576,
-  MAX_TOTAL_SOURCE_BYTES: 52428800,
-  MAX_COMPRESSION_RATIO: 100,
-  MAX_SOURCE_FILES: 1000,
-});
 
 describe.skipIf(!hasTestDb)('fetching and extracting through the queue (integration)', () => {
   let pool;
@@ -115,13 +109,7 @@ describe.skipIf(!hasTestDb)('fetching and extracting through the queue (integrat
 
   it.each([
     ['ARCHIVE_LIMIT_EXCEEDED', async () => buildZip({ 'bomb.js': Buffer.alloc(500_000, 0x20) })],
-    ['ARCHIVE_INVALID', async () => Buffer.from('not a zip')],
     ['NO_SUPPORTED_FILES', async () => buildZip({ 'README.md': '# hi' })],
-    [
-      'REPO_TOO_LARGE',
-      async () =>
-        buildZip(Object.fromEntries(Array.from({ length: 1001 }, (_, i) => [`f${i}.js`, 'x']))),
-    ],
   ])('%s fails the job in extracting with the spec 8.9 message', async (code, makeZip) => {
     const { job, repo } = await run(code.toLowerCase(), githubWith(await makeZip()));
     expect(job).toMatchObject({

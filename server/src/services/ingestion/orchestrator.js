@@ -1,12 +1,16 @@
-import { createFetchingStep } from './fetcher.js';
 import { IngestionError } from './IngestionError.js';
-import { createExtractingStep } from './zipExtractor.js';
 
 /**
  * @typedef {{ job: { id: string, repositoryId: string, jobType: string },
  *   jobs: ReturnType<typeof import('./jobRepository.js').createJobRepository>,
+ *   commitSha?: string, archive?: Buffer,
+ *   files?: { path: string, content: string }[],
+ *   configFiles?: { path: string, content: string }[],
+ *   skipped?: { path: string, reason: string }[],
  *   [key: string]: unknown }} PipelineContext
- *   Shared by the steps of one run; each step reads what earlier steps left on it.
+ *   Shared by the steps of one run; each step reads what earlier steps left on it: fetching
+ *   leaves `commitSha` and `archive`; extracting takes `archive` and leaves `files`,
+ *   `configFiles` and `skipped`.
  * @typedef {(ctx: PipelineContext) => Promise<void>} PipelineStep
  * @typedef {Record<'fetching' | 'extracting' | 'parsing' | 'resolving' | 'persisting', PipelineStep>} PipelineSteps
  */
@@ -38,19 +42,6 @@ const notImplemented = (phase) => async () => {
 export const PLACEHOLDER_STEPS = Object.freeze(
   Object.fromEntries(PHASES.map((phase) => [phase, notImplemented(phase)])),
 );
-
-/**
- * The real pipeline: fetching and extracting, then placeholders for the phases still to come.
- * @param {Parameters<typeof createFetchingStep>[0] & Parameters<typeof createExtractingStep>[0]} deps
- * @returns {PipelineSteps}
- */
-export function createPipelineSteps({ pool, crypto, github, limits, registry }) {
-  return Object.freeze({
-    ...PLACEHOLDER_STEPS,
-    fetching: createFetchingStep({ pool, crypto, github }),
-    extracting: createExtractingStep({ limits, registry }),
-  });
-}
 
 /**
  * Runs one ingestion job through the five phases in order (spec 7.5). The persisting step must

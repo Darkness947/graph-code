@@ -1,3 +1,4 @@
+import { buffer } from 'node:stream/consumers';
 import yazl from 'yazl';
 
 /** The top-level folder GitHub puts in every archive: `<repo>-<sha>/`. */
@@ -18,12 +19,7 @@ export function buildZip(files, { root = ARCHIVE_ROOT, compress = true } = {}) {
     else zip.addBuffer(Buffer.from(content), full, { compress });
   }
   zip.end();
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    zip.outputStream.on('data', (c) => chunks.push(c));
-    zip.outputStream.on('error', reject);
-    zip.outputStream.on('end', () => resolve(Buffer.concat(chunks)));
-  });
+  return buffer(zip.outputStream);
 }
 
 /**

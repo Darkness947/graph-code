@@ -5,8 +5,7 @@ import { createPool } from './db/pool.js';
 import { tokenCryptoFromConfig } from './services/auth/tokenCrypto.js';
 import { createGithubClient } from './services/github/githubClient.js';
 import { limitsFromConfig } from './services/ingestion/limits.js';
-import { createPipelineSteps } from './services/ingestion/orchestrator.js';
-import { startIngestion } from './services/ingestion/startIngestion.js';
+import { createPipelineSteps, startIngestion } from './services/ingestion/startIngestion.js';
 
 if (process.env.NODE_ENV !== 'production') {
   const { config: loadDotenv } = await import('dotenv');
