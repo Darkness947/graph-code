@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { AppError } from '../../errors/AppError.js';
 
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
@@ -76,4 +77,17 @@ export async function getUserToken(pool, crypto, userId) {
   );
   if (rows.length === 0 || !rows[0].access_token_enc) return null;
   return crypto.decrypt(rows[0].access_token_enc, rows[0].token_key_id);
+}
+
+/**
+ * Like getUserToken, but throws UNAUTHENTICATED when the user has no usable token.
+ * @param {import('pg').Pool} pool
+ * @param {ReturnType<typeof createTokenCrypto>} crypto
+ * @param {string} userId
+ * @returns {Promise<string>}
+ */
+export async function requireUserToken(pool, crypto, userId) {
+  const token = await getUserToken(pool, crypto, userId);
+  if (!token) throw new AppError('UNAUTHENTICATED', 'Please sign in to continue.');
+  return token;
 }

@@ -51,6 +51,15 @@ const REPO_SELECT = `SELECT r.id, r.owner, r.name, r.display_name, r.status, r.f
     SELECT * FROM ingestion_jobs WHERE repository_id = r.id ORDER BY created_at DESC, id DESC LIMIT 1
   ) j ON true`;
 
+/**
+ * Key used to match repositories by owner and name, regardless of capitalization.
+ * @param {string} owner
+ * @param {string} name
+ */
+export function repoKey(owner, name) {
+  return `${owner}/${name}`.toLowerCase();
+}
+
 function jobActive(jobId) {
   return new AppError('JOB_ACTIVE', 'This repository is already being analyzed.', { jobId });
 }
@@ -92,7 +101,7 @@ export function createRepositoryService(pool) {
     const { rows } = await pool.query('SELECT owner, name FROM repositories WHERE user_id = $1', [
       userId,
     ]);
-    return new Set(rows.map((r) => `${r.owner}/${r.name}`));
+    return new Set(rows.map((r) => repoKey(r.owner, r.name)));
   }
 
   /**
@@ -106,6 +115,7 @@ export function createRepositoryService(pool) {
     const name = meta.name.toLowerCase();
     const displayName = `${meta.owner}/${meta.name}`;
     const client = await pool.connect();
+    let repoId;
     try {
       await client.query('BEGIN');
       // Creates the row if absent; a concurrent insert waits for the other transaction.
@@ -120,6 +130,7 @@ export function createRepositoryService(pool) {
         [userId, owner, name],
       );
       const repo = rows[0];
+      repoId = repo.id;
       if (repo.status === 'ready') {
         throw new AppError('REPO_ALREADY_ANALYZED', "You've already analyzed this repository.", {
           repositoryId: repo.id,
@@ -141,8 +152,6 @@ export function createRepositoryService(pool) {
         [repo.id],
       );
       await client.query('COMMIT');
-      const repository = await get(userId, repo.id);
-      return { repository, job: repository.latestJob };
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
       // The one-active-job index fired: another request won the race.
@@ -151,6 +160,9 @@ export function createRepositoryService(pool) {
     } finally {
       client.release();
     }
+    // Read after the connection is released, so one request never holds two.
+    const repository = await get(userId, repoId);
+    return { repository, job: repository.latestJob };
   }
 
   return { list, get, addedKeys, addOrRetry };
