@@ -51,7 +51,7 @@ Graph Code turns a public GitHub repository into an interactive dependency graph
 - Branches are `solo/<task>-<slug>` (spec 0.1 shows `inc1/t1.3-auth`; solo adaptation).
 - Node 26 (deviation from spec's `.nvmrc` 22; user decision 10 Nov 2026).
 - D-04: follow the spec everywhere. UUID node ids, real nested folder nodes, edges importer -> imported, drawn unreversed.
-- One test repository: `Darkness947/vigilante-resume-tailor` (63 files); report per-100-file timing.
+- One test repository: `Darkness947/vigilante-resume-tailor` (70 source files after the skip rules); report per-100-file timing.
 - The canvas is an upgraded build on the prototype's foundations, still within spec 8.1/8.6.
 - Deadlines: Increment 1 by 15 Nov, Increment 2 by 23 Nov, Increment 3 by 30 Nov, demo ready by 12 Dec.
 
