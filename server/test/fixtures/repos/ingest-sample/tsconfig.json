@@ -1,0 +1,7 @@
+{
+  // the alias the sample app uses
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] },
+  },
+}

@@ -1,18 +1,22 @@
 import { createFetchingStep } from './fetcher.js';
+import { createParsingStep, createResolvingStep } from './graphSteps.js';
 import { createJobRepository } from './jobRepository.js';
 import { createDefaultRegistry } from './languages/languageRegistry.js';
 import { IngestionOrchestrator, PLACEHOLDER_STEPS } from './orchestrator.js';
+import { createParserService } from './parsing/parserService.js';
 import { createQueue } from './queue.js';
 import { createExtractingStep } from './zipExtractor.js';
 
 /**
- * The real pipeline: fetching and extracting, then placeholders for the phases still to come.
- * One language registry serves every step, so what extraction keeps is what parsing can read.
+ * The real pipeline: fetching, extracting, parsing and resolving, then a placeholder for
+ * persisting (T2.5). One language registry serves every step, so what extraction keeps is what
+ * parsing can read.
  * @param {{ pool: import('pg').Pool,
  *   crypto: ReturnType<typeof import('../auth/tokenCrypto.js').createTokenCrypto>,
  *   github: ReturnType<typeof import('../github/githubClient.js').createGithubClient>,
  *   limits: import('./limits.js').IngestionLimits,
- *   registry?: ReturnType<typeof createDefaultRegistry> }} deps
+ *   registry?: ReturnType<typeof createDefaultRegistry>,
+ *   parserService?: { parse: Function } }} deps
  * @returns {import('./orchestrator.js').PipelineSteps}
  */
 export function createPipelineSteps({
@@ -21,11 +25,14 @@ export function createPipelineSteps({
   github,
   limits,
   registry = createDefaultRegistry(),
+  parserService = createParserService(),
 }) {
   return Object.freeze({
     ...PLACEHOLDER_STEPS,
     fetching: createFetchingStep({ pool, crypto, github }),
     extracting: createExtractingStep({ limits, registry }),
+    parsing: createParsingStep({ registry, parserService }),
+    resolving: createResolvingStep({ registry }),
   });
 }
 
