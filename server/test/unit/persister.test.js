@@ -9,12 +9,13 @@ const file = (i) => ({
   exports: [],
 });
 
-function setup({ succeed = true, files = 2, failOn } = {}) {
+function setup({ succeed = true, files = 2, failOn, rollbackFails = false } = {}) {
   const sql = [];
   const client = {
     query: vi.fn(async (text, params = []) => {
       sql.push({ text, params });
       if (failOn && text.includes(failOn)) throw new Error('boom');
+      if (text === 'ROLLBACK' && rollbackFails) throw new Error('rollback failed');
       return { rowCount: 1 };
     }),
     release: vi.fn(),
@@ -49,7 +50,7 @@ describe('createPersistingStep (unit)', () => {
       'SUCCEED',
       'COMMIT',
     ]);
-    expect(client.release).toHaveBeenCalledOnce();
+    expect(client.release).toHaveBeenCalledExactlyOnceWith(false);
     expect(ctx.fileGraph).toBeUndefined();
   });
 
@@ -67,6 +68,12 @@ describe('createPersistingStep (unit)', () => {
     expect(sql.at(-1).text).toBe('ROLLBACK');
     expect(sql.some((s) => s.text === 'COMMIT')).toBe(false);
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('destroys the connection and rethrows the original error when ROLLBACK also fails', async () => {
+    const { client, pool, ctx } = setup({ failOn: 'INSERT INTO nodes', rollbackFails: true });
+    await expect(createPersistingStep({ pool })(ctx)).rejects.toThrow('boom');
+    expect(client.release).toHaveBeenCalledExactlyOnceWith(true);
   });
 
   it('rolls back quietly when the job is no longer running', async () => {

@@ -45,6 +45,13 @@ export function createPersistingStep({ pool, beforeChunk }) {
     const repositoryId = ctx.job.repositoryId;
 
     const client = await pool.connect();
+    /** Set when ROLLBACK fails: the connection may hold an open transaction, so it is destroyed. */
+    let broken = false;
+    const rollback = () =>
+      client.query('ROLLBACK').catch((err) => {
+        broken = true;
+        throw err;
+      });
     try {
       await client.query('BEGIN');
       await client.query('DELETE FROM nodes WHERE repository_id = $1', [repositoryId]);
@@ -101,19 +108,15 @@ export function createPersistingStep({ pool, beforeChunk }) {
 
       if (!(await ctx.jobs.succeed(ctx.job.id, model.report, client))) {
         // The job was recovered or deleted meanwhile: leave its state alone.
-        await client.query('ROLLBACK');
+        await rollback();
         return;
       }
       await client.query('COMMIT');
     } catch (err) {
-      try {
-        await client.query('ROLLBACK');
-      } catch {
-        // The connection is broken; releasing with the error discards it.
-      }
+      await rollback().catch(() => {});
       throw err;
     } finally {
-      client.release();
+      client.release(broken);
     }
   };
 }
