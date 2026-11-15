@@ -85,8 +85,10 @@ describe('parsing step: progress (AC4)', () => {
 
   it('drops the source text from the context once parsed', async () => {
     const ctx = context(files(1));
+    const extracted = ctx.files;
     await createParsingStep({ registry, parserService, now: () => 0 })(ctx);
     expect(ctx.files).toBeUndefined();
+    expect(extracted).toEqual([undefined]);
     expect(ctx.parsed[0].file).toMatchObject({ path: 'f0.js', language: 'js', exports: ['a'] });
   });
 });
