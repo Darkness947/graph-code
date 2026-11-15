@@ -39,12 +39,11 @@ export default function RepoCard({ repo, onRetry, onRemove }) {
           {repo.owner}/<strong>{repo.name}</strong>
         </span>
         <span className={`repo-badge ${badge.className}`}>{badge.text}</span>
-        {state === 'ready' &&
-          languages.map((l) => (
-            <span key={l} className="repo-lang">
-              {l}
-            </span>
-          ))}
+        {languages.map((l) => (
+          <span key={l} className="repo-lang">
+            {l}
+          </span>
+        ))}
       </div>
 
       {state === 'analyzing' && <ProgressBlock job={job} />}

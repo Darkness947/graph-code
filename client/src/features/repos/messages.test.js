@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addErrorMessage, phaseLabel, tierLine } from './messages.js';
+import { addErrorMessage, formatDate, phaseLabel, tierLine } from './messages.js';
 
 describe('phaseLabel (spec 8.5)', () => {
   it.each([
@@ -30,5 +30,13 @@ describe('addErrorMessage (spec 8.9)', () => {
   });
   it('falls back to the generic message', () => {
     expect(addErrorMessage({ code: 'WHATEVER' })).toBe('Something went wrong. Try again.');
+  });
+});
+
+describe('formatDate (spec 8.5)', () => {
+  it('uses three-letter months, including September, and zero-padded time', () => {
+    const local = new Date(2026, 8, 5, 9, 7).toISOString();
+    expect(formatDate(local)).toBe('5 Sep 2026');
+    expect(formatDate(local, { time: true })).toBe('5 Sep 2026, 09:07');
   });
 });

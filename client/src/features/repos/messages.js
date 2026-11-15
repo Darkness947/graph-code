@@ -53,22 +53,17 @@ export function addErrorMessage(err) {
 
 export const GENERIC_ERROR = 'Something went wrong. Try again.';
 
-const DATE_ONLY = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
-const DATE_TIME = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad = (n) => String(n).padStart(2, '0');
 
-/** "12 Nov 2026" or, with `time`, "12 Nov 2026, 10:00" (browser time zone). */
-export const formatDate = (iso, { time = false } = {}) =>
-  (time ? DATE_TIME : DATE_ONLY).format(new Date(iso));
+/**
+ * "12 Nov 2026" or, with `time`, "12 Nov 2026, 10:00" (spec 8.5), in the browser time zone.
+ * Months are fixed three-letter names: Intl en-GB prints "Sept".
+ */
+export function formatDate(iso, { time = false } = {}) {
+  const d = new Date(iso);
+  const date = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  return time ? `${date}, ${pad(d.getHours())}:${pad(d.getMinutes())}` : date;
+}
 
 export const SESSION_EXPIRED = 'Your session has expired. Please sign in again.';
