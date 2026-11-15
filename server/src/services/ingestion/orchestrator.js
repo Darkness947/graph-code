@@ -3,8 +3,14 @@ import { IngestionError } from './IngestionError.js';
 /**
  * @typedef {{ job: { id: string, repositoryId: string, jobType: string },
  *   jobs: ReturnType<typeof import('./jobRepository.js').createJobRepository>,
+ *   commitSha?: string, archive?: Buffer,
+ *   files?: { path: string, content: string }[],
+ *   configFiles?: { path: string, content: string }[],
+ *   skipped?: { path: string, reason: string }[],
  *   [key: string]: unknown }} PipelineContext
- *   Shared by the steps of one run; each step reads what earlier steps left on it.
+ *   Shared by the steps of one run; each step reads what earlier steps left on it: fetching
+ *   leaves `commitSha` and `archive`; extracting takes `archive` and leaves `files`,
+ *   `configFiles` and `skipped`.
  * @typedef {(ctx: PipelineContext) => Promise<void>} PipelineStep
  * @typedef {Record<'fetching' | 'extracting' | 'parsing' | 'resolving' | 'persisting', PipelineStep>} PipelineSteps
  */
@@ -29,8 +35,8 @@ const notImplemented = (phase) => async () => {
 };
 
 /**
- * Placeholder steps until T2.3 (fetching, extracting), T2.4 (parsing, resolving) and
- * T2.5 (persisting) replace them. They fail the job with INTERNAL rather than leave it queued.
+ * Placeholder steps until T2.4 (parsing, resolving) and T2.5 (persisting) replace them. They fail
+ * the job with INTERNAL rather than leave it queued.
  * @type {PipelineSteps}
  */
 export const PLACEHOLDER_STEPS = Object.freeze(

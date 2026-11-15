@@ -1,6 +1,33 @@
+import { createFetchingStep } from './fetcher.js';
 import { createJobRepository } from './jobRepository.js';
-import { IngestionOrchestrator } from './orchestrator.js';
+import { createDefaultRegistry } from './languages/languageRegistry.js';
+import { IngestionOrchestrator, PLACEHOLDER_STEPS } from './orchestrator.js';
 import { createQueue } from './queue.js';
+import { createExtractingStep } from './zipExtractor.js';
+
+/**
+ * The real pipeline: fetching and extracting, then placeholders for the phases still to come.
+ * One language registry serves every step, so what extraction keeps is what parsing can read.
+ * @param {{ pool: import('pg').Pool,
+ *   crypto: ReturnType<typeof import('../auth/tokenCrypto.js').createTokenCrypto>,
+ *   github: ReturnType<typeof import('../github/githubClient.js').createGithubClient>,
+ *   limits: import('./limits.js').IngestionLimits,
+ *   registry?: ReturnType<typeof createDefaultRegistry> }} deps
+ * @returns {import('./orchestrator.js').PipelineSteps}
+ */
+export function createPipelineSteps({
+  pool,
+  crypto,
+  github,
+  limits,
+  registry = createDefaultRegistry(),
+}) {
+  return Object.freeze({
+    ...PLACEHOLDER_STEPS,
+    fetching: createFetchingStep({ pool, crypto, github }),
+    extracting: createExtractingStep({ limits, registry }),
+  });
+}
 
 /**
  * Startup half of spec 7.5 Queue. First fails every queued or running job left over from before
