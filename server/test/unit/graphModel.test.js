@@ -10,11 +10,12 @@ const file = (path, language = path.slice(path.lastIndexOf('.') + 1)) => ({
   exports: ['x'],
 });
 
-function model(fileGraph) {
+/** Builds a model with empty defaults and predictable ids (`id-1`, `id-2`, …) unless given `deps`. */
+function model(fileGraph, deps) {
   let n = 0;
   return buildGraphModel(
     { edges: [], unresolved: [], skipped: [], ...fileGraph },
-    { newId: () => `id-${++n}` },
+    deps ?? { newId: () => `id-${++n}` },
   );
 }
 
@@ -76,12 +77,7 @@ describe('buildGraphModel', () => {
   });
 
   it('gives every node a distinct UUID by default', () => {
-    const m = buildGraphModel({
-      files: [file('a/b.ts'), file('a/c.ts')],
-      edges: [],
-      unresolved: [],
-      skipped: [],
-    });
+    const m = model({ files: [file('a/b.ts'), file('a/c.ts')] }, {});
     const ids = m.nodes.map((n) => n.id);
     expect(new Set(ids).size).toBe(3);
     for (const id of ids) expect(id).toMatch(/^[0-9a-f-]{36}$/);

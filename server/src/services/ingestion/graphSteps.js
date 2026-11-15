@@ -1,4 +1,5 @@
-import { parseFile, resolveImports } from './graphBuilder.js';
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
+import { assembleFileGraph, parseFileInto } from './graphBuilder.js';
 
 /** Progress is written after this many files, or after PROGRESS_INTERVAL_MS (spec 7.5 step 3). */
 export const PROGRESS_EVERY_FILES = 20;
@@ -9,8 +10,9 @@ export const PROGRESS_INTERVAL_MS = 1000;
  * parse in `ctx.skipped` with reason `parse_error`, and writes `files_processed` and
  * `files_skipped` every 20 files or every second, whichever comes first, and once at the end.
  * `files_processed` counts every attempted file, so it ends equal to `files_total`.
- * Leaves `ctx.parsed` and drops `ctx.files`, so source text is not kept past parsing.
- * Stops early, leaving the job to the orchestrator, when the job is no longer running.
+ * Takes `ctx.files` and releases each file's source text once it is parsed; leaves `ctx.parsed`.
+ * Yields to the event loop after each file so other requests and jobs are not starved.
+ * Returns early, without `ctx.parsed`, when the job is no longer running (see `PipelineStep`).
  * @param {{ registry: ReturnType<typeof import('./languages/languageRegistry.js').createLanguageRegistry>,
  *   parserService: { parse: Function }, now?: () => number }} deps
  * @returns {import('./orchestrator.js').PipelineStep}
@@ -22,27 +24,27 @@ export function createParsingStep({ registry, parserService, now = Date.now }) {
     /** @type {import('./graphBuilder.js').ParsedFile[]} */
     const parsed = [];
     let processed = 0;
-    let reported = 0;
-    let reportedAt = now();
-    const report = async () => {
-      reported = processed;
-      reportedAt = now();
+    let last = { count: 0, at: now() };
+    /** Writes the counters when due (or when forced); false when the job is no longer running. */
+    const report = async (force) => {
+      const due =
+        processed - last.count >= PROGRESS_EVERY_FILES || now() - last.at >= PROGRESS_INTERVAL_MS;
+      if (!(force || due) || processed === last.count) return true;
+      last = { count: processed, at: now() };
       return ctx.jobs.updateCounts(ctx.job.id, {
         filesProcessed: processed,
         filesSkipped: ctx.skipped.length,
       });
     };
 
-    for (const file of files) {
-      const result = parseFile(file, { registry, parserService });
-      if (result && 'error' in result) ctx.skipped.push({ path: file.path, reason: result.error });
-      else if (result) parsed.push(result);
+    for (let i = 0; i < files.length; i++) {
+      parseFileInto(files[i], { registry, parserService }, parsed, ctx.skipped);
+      files[i] = undefined;
       processed++;
-      const due =
-        processed - reported >= PROGRESS_EVERY_FILES || now() - reportedAt >= PROGRESS_INTERVAL_MS;
-      if (due && !(await report())) return;
+      if (!(await report(false))) return;
+      await yieldToEventLoop();
     }
-    if (processed !== reported && !(await report())) return;
+    if (!(await report(true))) return;
     ctx.parsed = parsed;
   };
 }
@@ -57,10 +59,6 @@ export function createResolvingStep({ registry }) {
   return async function resolving(ctx) {
     const parsed = ctx.parsed;
     ctx.parsed = undefined;
-    ctx.fileGraph = {
-      files: parsed.map((p) => p.file),
-      ...resolveImports(parsed, ctx.configFiles, registry),
-      skipped: ctx.skipped,
-    };
+    ctx.fileGraph = assembleFileGraph(parsed, ctx.skipped, ctx.configFiles, registry);
   };
 }

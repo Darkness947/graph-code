@@ -15,7 +15,9 @@ import { IngestionError } from './IngestionError.js';
  *   `configFiles` and `skipped`; parsing takes `files`, adds parse errors to `skipped` and leaves
  *   `parsed`; resolving takes `parsed` and leaves `fileGraph`, which persisting turns into rows
  *   with `buildGraphModel`.
- * @typedef {(ctx: PipelineContext) => Promise<void>} PipelineStep
+ * @typedef {(ctx: PipelineContext) => Promise<void>} PipelineStep A step may return early once a
+ *   job update reports the job is no longer running; the orchestrator's next `setPhase` then
+ *   ends the run, so later steps never see the missing output.
  * @typedef {Record<'fetching' | 'extracting' | 'parsing' | 'resolving' | 'persisting', PipelineStep>} PipelineSteps
  */
 

@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildZip } from './zip.js';
 
@@ -12,17 +12,22 @@ function walk(dir) {
   });
 }
 
+/** Every file of a fixture repository as `{ path, content }`, with repository-relative paths. */
+function fixtureFiles(name) {
+  const root = join(REPOS, name);
+  return walk(root).map((full) => ({
+    path: relative(root, full).split(sep).join('/'),
+    content: readFileSync(full, 'utf8'),
+  }));
+}
+
 /**
  * Loads a fixture repository as `{ files, configFiles }` with repository-relative paths.
  * Only root `tsconfig.json` / `jsconfig.json` count as configuration files.
  * @param {string} name directory under test/fixtures/repos
  */
 export function loadFixtureRepo(name) {
-  const root = join(REPOS, name);
-  const all = walk(root).map((full) => ({
-    path: relative(root, full).split('\\').join('/'),
-    content: readFileSync(full, 'utf8'),
-  }));
+  const all = fixtureFiles(name);
   const isConfig = (f) => f.path === 'tsconfig.json' || f.path === 'jsconfig.json';
   return { files: all.filter((f) => !isConfig(f)), configFiles: all.filter(isConfig) };
 }
@@ -34,11 +39,25 @@ export function loadFixtureRepo(name) {
  * @returns {Promise<Buffer>}
  */
 export function zipFixtureRepo(name, extra = {}) {
-  const root = join(REPOS, name);
-  const entries = Object.fromEntries(
-    walk(root).map((full) => [relative(root, full).split('\\').join('/'), readFileSync(full)]),
-  );
+  const entries = Object.fromEntries(fixtureFiles(name).map((f) => [f.path, f.content]));
   return buildZip({ ...entries, ...extra });
+}
+
+/** Marks source text that `failingParser` refuses to parse. */
+export const PARSE_ERROR_MARKER = 'TEST_ONLY_FORCE_PARSE_ERROR';
+
+/**
+ * A parser service that throws for source containing PARSE_ERROR_MARKER (the parser API takes no
+ * path) and otherwise delegates, to exercise the `parse_error` skip.
+ * @param {{ parse: Function }} base
+ */
+export function failingParser(base) {
+  return {
+    parse: (grammar, text) => {
+      if (text.includes(PARSE_ERROR_MARKER)) throw new Error('forced parse error');
+      return base.parse(grammar, text);
+    },
+  };
 }
 
 /** Wraps a syntax tree so any node property outside the allowed extractor API throws. */

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { hasTestDb, resetTestDatabase } from '../helpers/db.js';
-import { zipFixtureRepo } from '../helpers/fixtures.js';
+import { failingParser, zipFixtureRepo } from '../helpers/fixtures.js';
 import { DEFAULT_LIMITS as LIMITS } from '../helpers/limits.js';
 import {
   createPipelineSteps,
@@ -12,13 +12,7 @@ import { createParserService } from '../../src/services/ingestion/parsing/parser
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 
 /** The native parser, except that it fails on the fixture's `src/broken.js` (parse_error). */
-const native = createParserService({ backend: 'native' });
-const parserService = {
-  parse: (grammar, text) => {
-    if (text.includes('FORCE_PARSE_ERROR')) throw new Error('forced parse error');
-    return native.parse(grammar, text);
-  },
-};
+const parserService = failingParser(createParserService({ backend: 'native' }));
 
 describe.skipIf(!hasTestDb)('parse, resolve and build a fixture ZIP (integration)', () => {
   let pool;

@@ -6,6 +6,7 @@ import {
 } from '../../src/services/ingestion/graphSteps.js';
 import { createDefaultRegistry } from '../../src/services/ingestion/languages/languageRegistry.js';
 import { createParserService } from '../../src/services/ingestion/parsing/parserService.js';
+import { failingParser, PARSE_ERROR_MARKER } from '../helpers/fixtures.js';
 
 const registry = createDefaultRegistry();
 const parserService = createParserService({ backend: 'native' });
@@ -61,14 +62,10 @@ describe('parsing step: progress (AC4)', () => {
   });
 
   it('counts a parse failure in files_skipped on top of the extraction skips', async () => {
-    const throwing = {
-      parse: (grammar, text) => {
-        if (text.includes('BOOM')) throw new Error('boom');
-        return parserService.parse(grammar, text);
-      },
-    };
     const skipped = [{ path: 'big.js', reason: 'too_large' }];
-    const ctx = context([...files(2), { path: 'bad.ts', content: 'BOOM' }], { skipped });
+    const bad = { path: 'bad.ts', content: PARSE_ERROR_MARKER };
+    const ctx = context([...files(2), bad], { skipped });
+    const throwing = failingParser(parserService);
     await createParsingStep({ registry, parserService: throwing, now: () => 0 })(ctx);
     expect(progress(ctx)).toEqual([{ filesProcessed: 3, filesSkipped: 2 }]);
     expect(ctx.skipped).toEqual([

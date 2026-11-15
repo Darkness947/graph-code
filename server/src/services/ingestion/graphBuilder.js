@@ -19,7 +19,7 @@ import { createParserService } from './parsing/parserService.js';
  * @param {{ registry: ReturnType<typeof createDefaultRegistry>, parserService: { parse: Function } }} deps
  * @returns {ParsedFile | { error: 'parse_error' } | null} null for an unsupported extension
  */
-export function parseFile(file, { registry, parserService }) {
+function parseFile(file, { registry, parserService }) {
   const plugin = registry.pluginForPath(file.path);
   if (!plugin) return null;
   let extraction;
@@ -50,7 +50,7 @@ export function parseFile(file, { registry, parserService }) {
  * @param {ReturnType<typeof createDefaultRegistry>} registry
  * @returns {Pick<FileGraph, 'edges' | 'unresolved'>}
  */
-export function resolveImports(parsed, configFiles, registry) {
+function resolveImports(parsed, configFiles, registry) {
   // One resolver and one file index per language family, so concurrent jobs share no state.
   const families = new Map();
   for (const { file, plugin } of parsed) {
@@ -106,6 +106,37 @@ export function resolveImports(parsed, configFiles, registry) {
 }
 
 /**
+ * Parses one file and adds it to `parsed`, or to `skipped` with reason `parse_error`.
+ * A file with an unsupported extension is ignored.
+ * @param {{ path: string, content: string }} file
+ * @param {Parameters<typeof parseFile>[1]} deps
+ * @param {ParsedFile[]} parsed
+ * @param {FileGraph['skipped']} skipped
+ */
+export function parseFileInto(file, deps, parsed, skipped) {
+  const result = parseFile(file, deps);
+  if (!result) return;
+  if ('error' in result) skipped.push({ path: file.path, reason: result.error });
+  else parsed.push(result);
+}
+
+/**
+ * Resolves the parsed files' imports and assembles the file graph that persisting builds on.
+ * @param {ParsedFile[]} parsed
+ * @param {FileGraph['skipped']} skipped
+ * @param {{ path: string, content: string }[]} configFiles
+ * @param {ReturnType<typeof createDefaultRegistry>} registry
+ * @returns {FileGraph}
+ */
+export function assembleFileGraph(parsed, skipped, configFiles, registry) {
+  return {
+    files: parsed.map((p) => p.file),
+    ...resolveImports(parsed, configFiles, registry),
+    skipped,
+  };
+}
+
+/**
  * Parses every file and resolves its imports in one call (spec 7.5 steps 3 and 4). The pipeline
  * runs the two halves as separate steps (`graphSteps.js`); this is the same work without progress.
  * @param {{ files: { path: string, content: string }[], configFiles?: { path: string, content: string }[] }} input
@@ -118,15 +149,6 @@ export function buildFileGraph(
 ) {
   const parsed = [];
   const skipped = [];
-  for (const file of files) {
-    const result = parseFile(file, { registry, parserService });
-    if (!result) continue;
-    if ('error' in result) skipped.push({ path: file.path, reason: result.error });
-    else parsed.push(result);
-  }
-  return {
-    files: parsed.map((p) => p.file),
-    ...resolveImports(parsed, configFiles, registry),
-    skipped,
-  };
+  for (const file of files) parseFileInto(file, { registry, parserService }, parsed, skipped);
+  return assembleFileGraph(parsed, skipped, configFiles, registry);
 }

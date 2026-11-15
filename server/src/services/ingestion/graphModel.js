@@ -53,36 +53,27 @@ export function buildGraphModel(
     }
   }
 
+  /** @returns {GraphNode} file columns default to null, which is what a folder stores */
+  const node = (path, nodeType, metrics, file = {}) => ({
+    id: newId(),
+    path,
+    pathLtree: encodePathLtree(path),
+    name: lastSegment(path),
+    nodeType,
+    language: file.language ?? null,
+    contentHash: file.contentHash ?? null,
+    sizeBytes: file.sizeBytes ?? null,
+    exports: file.exports ?? null,
+    metrics,
+  });
+
   /** @type {GraphNode[]} */
   const nodes = [];
-  for (const [path, count] of fileCount) {
-    nodes.push({
-      id: newId(),
-      path,
-      pathLtree: encodePathLtree(path),
-      name: lastSegment(path),
-      nodeType: 'folder',
-      language: null,
-      contentHash: null,
-      sizeBytes: null,
-      exports: null,
-      metrics: { fileCount: count },
-    });
-  }
+  for (const [path, count] of fileCount) nodes.push(node(path, 'folder', { fileCount: count }));
   const languageSummary = {};
   for (const file of files) {
-    nodes.push({
-      id: newId(),
-      path: file.path,
-      pathLtree: encodePathLtree(file.path),
-      name: lastSegment(file.path),
-      nodeType: 'file',
-      language: file.language,
-      contentHash: file.contentHash,
-      sizeBytes: file.sizeBytes,
-      exports: file.exports,
-      metrics: { fanIn: fanIn.get(file.path) ?? 0, fanOut: fanOut.get(file.path) ?? 0 },
-    });
+    const metrics = { fanIn: fanIn.get(file.path) ?? 0, fanOut: fanOut.get(file.path) ?? 0 };
+    nodes.push(node(file.path, 'file', metrics, file));
     languageSummary[file.language] = (languageSummary[file.language] ?? 0) + 1;
   }
   nodes.sort(byPath);
