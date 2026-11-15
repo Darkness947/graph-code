@@ -116,6 +116,8 @@ describe('extractArchive: limits (AC2)', () => {
     });
   });
 
+  // The ZIP reader rejects these two names itself before `repositoryPath` sees them; the
+  // `repositoryPath` tests below cover our own check of the same rule.
   it('`..` path → ARCHIVE_INVALID', async () => {
     const zip = renameEntry(
       await buildZip({ 'xx/evil.js': 'x', 'a.js': 'y' }),
@@ -221,6 +223,8 @@ describe('extractArchive: skip rules (AC3)', () => {
     ['src/app.test.js'],
     ['src/app.spec.tsx'],
     ['src/app.test.utils.ts'],
+    ['src/.test.js'],
+    ['.spec.ts'],
     ['src/__tests__/helper.ts'],
     ['__tests__/deep/helper.js'],
     ['src/types.d.ts'],

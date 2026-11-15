@@ -14,7 +14,7 @@ const SKIPPED_DIRECTORIES = new Set([
   '__tests__',
 ]);
 /** `*.test.*` and `*.spec.*`. */
-const TEST_FILE_RE = /.\.(?:test|spec)\../;
+const TEST_FILE_RE = /\.(?:test|spec)\./;
 
 /**
  * @typedef {object} ExtractedArchive
