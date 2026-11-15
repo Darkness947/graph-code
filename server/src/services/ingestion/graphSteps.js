@@ -21,8 +21,8 @@ export function createParsingStep({ registry, parserService, now = Date.now }) {
   return async function parsing(ctx) {
     const files = ctx.files;
     ctx.files = undefined;
-    /** @type {import('./graphBuilder.js').ParsedFile[]} */
-    const parsed = [];
+    /** @type {import('./graphBuilder.js').ParseResults} */
+    const results = { parsed: [], skipped: ctx.skipped };
     let processed = 0;
     let last = { count: 0, at: now() };
     /** Writes the counters when due (or when forced); false when the job is no longer running. */
@@ -38,14 +38,14 @@ export function createParsingStep({ registry, parserService, now = Date.now }) {
     };
 
     for (let i = 0; i < files.length; i++) {
-      parseFileInto(files[i], { registry, parserService }, parsed, ctx.skipped);
+      parseFileInto(files[i], { registry, parserService }, results);
       files[i] = undefined;
       processed++;
       if (!(await report(false))) return;
       await yieldToEventLoop();
     }
     if (!(await report(true))) return;
-    ctx.parsed = parsed;
+    ctx.parsed = results.parsed;
   };
 }
 
@@ -59,6 +59,6 @@ export function createResolvingStep({ registry }) {
   return async function resolving(ctx) {
     const parsed = ctx.parsed;
     ctx.parsed = undefined;
-    ctx.fileGraph = assembleFileGraph(parsed, ctx.skipped, ctx.configFiles, registry);
+    ctx.fileGraph = assembleFileGraph({ parsed, skipped: ctx.skipped }, ctx.configFiles, registry);
   };
 }
