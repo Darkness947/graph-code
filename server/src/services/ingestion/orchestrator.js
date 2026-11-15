@@ -41,8 +41,8 @@ const notImplemented = (phase) => async () => {
 };
 
 /**
- * Placeholder steps for phases with no real step yet (for tests that run a partial pipeline). They fail the job
- * with INTERNAL rather than leave it queued.
+ * Placeholder steps for phases with no real step yet (for tests that run a partial pipeline).
+ * They fail the job with INTERNAL rather than leave it queued.
  * @type {PipelineSteps}
  */
 export const PLACEHOLDER_STEPS = Object.freeze(

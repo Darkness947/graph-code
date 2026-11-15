@@ -9,15 +9,16 @@ import { createQueue } from './queue.js';
 import { createExtractingStep } from './zipExtractor.js';
 
 /**
- * The real pipeline: fetching, extracting, parsing, resolving and persisting. One language registry serves every step, so what extraction keeps is what
- * parsing can read.
+ * The real pipeline: fetching, extracting, parsing, resolving and persisting. One language
+ * registry serves every step, so what extraction keeps is what parsing can read.
  * @param {{ pool: import('pg').Pool,
  *   crypto: ReturnType<typeof import('../auth/tokenCrypto.js').createTokenCrypto>,
  *   github: ReturnType<typeof import('../github/githubClient.js').createGithubClient>,
  *   limits: import('./limits.js').IngestionLimits,
  *   registry?: ReturnType<typeof createDefaultRegistry>,
  *   parserService?: { parse: Function },
- *   persistHook?: Parameters<typeof createPersistingStep>[0]['beforeChunk'] }} deps  `persistHook` is a test hook
+ *   persistHook?: Parameters<typeof createPersistingStep>[0]['beforeChunk'] }} deps
+ *   `persistHook` is a test hook, passed to the persisting step; production never sets it.
  * @returns {import('./orchestrator.js').PipelineSteps}
  */
 export function createPipelineSteps({
