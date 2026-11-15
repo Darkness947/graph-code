@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildZip } from './zip.js';
 
 const REPOS = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'repos');
 
@@ -24,6 +25,20 @@ export function loadFixtureRepo(name) {
   }));
   const isConfig = (f) => f.path === 'tsconfig.json' || f.path === 'jsconfig.json';
   return { files: all.filter((f) => !isConfig(f)), configFiles: all.filter(isConfig) };
+}
+
+/**
+ * Zips a fixture repository with `yazl`, shaped like a GitHub archive (spec 7.5 step 2).
+ * @param {string} name directory under test/fixtures/repos
+ * @param {Record<string, string>} [extra] more entries, e.g. ones git cannot hold (`node_modules/`)
+ * @returns {Promise<Buffer>}
+ */
+export function zipFixtureRepo(name, extra = {}) {
+  const root = join(REPOS, name);
+  const entries = Object.fromEntries(
+    walk(root).map((full) => [relative(root, full).split('\\').join('/'), readFileSync(full)]),
+  );
+  return buildZip({ ...entries, ...extra });
 }
 
 /** Wraps a syntax tree so any node property outside the allowed extractor API throws. */
