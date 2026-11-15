@@ -139,6 +139,32 @@ describe.skipIf(!hasTestDb)('atomic persistence (integration)', { timeout: 60000
     });
   });
 
+  it('leaves everything to startup recovery when the job stops running mid-persist', async () => {
+    const repoId = await newRepo('stopped');
+    let stopped = false;
+    const job = await ingest(repoId, async () => {
+      if (stopped) return;
+      stopped = true;
+      // What startup recovery does to a job: fail it as INTERRUPTED, with its repository.
+      await pool.query(
+        `WITH j AS (
+           UPDATE ingestion_jobs SET status = 'failed', error_code = 'INTERRUPTED', finished_at = now()
+           WHERE repository_id = $1 AND status = 'running' RETURNING repository_id
+         ) UPDATE repositories SET status = 'failed' FROM j WHERE repositories.id = j.repository_id`,
+        [repoId],
+      );
+    });
+    // succeed() reported the job was no longer running, so nothing was written or overwritten.
+    expect(job).toMatchObject({ status: 'failed', error_code: 'INTERRUPTED' });
+    expect(await counts(repoId)).toEqual({ nodes: 0, edges: 0, unresolved: 0 });
+    expect(await repoRow(repoId)).toMatchObject({
+      status: 'failed',
+      file_count: null,
+      commit_sha: null,
+      last_ingested_at: null,
+    });
+  });
+
   it('AC1: a failure on a resync keeps the earlier graph and statistics untouched', async () => {
     const repoId = await newRepo('fail-resync');
     await ingest(repoId);

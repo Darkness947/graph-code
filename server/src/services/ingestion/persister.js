@@ -7,10 +7,10 @@ export const CHUNK_ROWS = 500;
  * Inserts rows in chunks of at most CHUNK_ROWS, each one parameterized statement. The SQL text
  * holds only placeholders built from the row count; every value travels as a parameter.
  * @param {import('pg').PoolClient} client
- * @param {{ table: string, columns: string, casts?: Record<number, string>, rows: unknown[][],
+ * @param {{ table: string, columns: string[], casts?: Record<string, string>, rows: unknown[][],
  *   beforeChunk?: (info: { table: string, index: number }) => void | Promise<void> }} spec
- *   `table` and `columns` are code constants, never user input. `casts[i]` is appended to the
- *   i-th placeholder (for example `::ltree`).
+ *   `table` and `columns` are code constants, never user input. `casts[column]` is appended to
+ *   that column's placeholder (for example `{ path_ltree: '::ltree' }`).
  */
 async function insertChunks(client, { table, columns, casts = {}, rows, beforeChunk }) {
   for (let index = 0, start = 0; start < rows.length; index++, start += CHUNK_ROWS) {
@@ -19,10 +19,10 @@ async function insertChunks(client, { table, columns, casts = {}, rows, beforeCh
     const width = chunk[0].length;
     const values = chunk.map(
       (_, r) =>
-        `(${Array.from({ length: width }, (_c, c) => `$${r * width + c + 1}${casts[c] ?? ''}`).join(', ')})`,
+        `(${columns.map((name, c) => `$${r * width + c + 1}${casts[name] ?? ''}`).join(', ')})`,
     );
     await client.query(
-      `INSERT INTO ${table} (${columns}) VALUES ${values.join(', ')}`,
+      `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${values.join(', ')}`,
       chunk.flat(),
     );
   }
@@ -58,9 +58,20 @@ export function createPersistingStep({ pool, beforeChunk }) {
 
       await insertChunks(client, {
         table: 'nodes',
-        columns:
-          'id, repository_id, path, path_ltree, name, node_type, language, content_hash, size_bytes, exports, metrics',
-        casts: { 3: '::ltree', 10: '::jsonb' },
+        columns: [
+          'id',
+          'repository_id',
+          'path',
+          'path_ltree',
+          'name',
+          'node_type',
+          'language',
+          'content_hash',
+          'size_bytes',
+          'exports',
+          'metrics',
+        ],
+        casts: { path_ltree: '::ltree', metrics: '::jsonb' },
         rows: model.nodes.map((n) => [
           n.id,
           repositoryId,
@@ -78,13 +89,13 @@ export function createPersistingStep({ pool, beforeChunk }) {
       });
       await insertChunks(client, {
         table: 'edges',
-        columns: 'repository_id, source_node_id, target_node_id',
+        columns: ['repository_id', 'source_node_id', 'target_node_id'],
         rows: model.edges.map((e) => [repositoryId, e.source, e.target]),
         beforeChunk,
       });
       await insertChunks(client, {
         table: 'unresolved_imports',
-        columns: 'source_node_id, raw_specifier, reason',
+        columns: ['source_node_id', 'raw_specifier', 'reason'],
         rows: model.unresolved.map((u) => [u.sourceNodeId, u.rawSpecifier, u.reason]),
         beforeChunk,
       });
