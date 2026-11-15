@@ -7,10 +7,14 @@ import { IngestionError } from './IngestionError.js';
  *   files?: { path: string, content: string }[],
  *   configFiles?: { path: string, content: string }[],
  *   skipped?: { path: string, reason: string }[],
+ *   parsed?: import('./graphBuilder.js').ParsedFile[],
+ *   fileGraph?: import('./graphBuilder.js').FileGraph,
  *   [key: string]: unknown }} PipelineContext
  *   Shared by the steps of one run; each step reads what earlier steps left on it: fetching
  *   leaves `commitSha` and `archive`; extracting takes `archive` and leaves `files`,
- *   `configFiles` and `skipped`.
+ *   `configFiles` and `skipped`; parsing takes `files`, adds parse errors to `skipped` and leaves
+ *   `parsed`; resolving takes `parsed` and leaves `fileGraph`, which persisting turns into rows
+ *   with `buildGraphModel`.
  * @typedef {(ctx: PipelineContext) => Promise<void>} PipelineStep
  * @typedef {Record<'fetching' | 'extracting' | 'parsing' | 'resolving' | 'persisting', PipelineStep>} PipelineSteps
  */
@@ -35,8 +39,8 @@ const notImplemented = (phase) => async () => {
 };
 
 /**
- * Placeholder steps until T2.4 (parsing, resolving) and T2.5 (persisting) replace them. They fail
- * the job with INTERNAL rather than leave it queued.
+ * Placeholder steps for phases with no real step yet (persisting until T2.5). They fail the job
+ * with INTERNAL rather than leave it queued.
  * @type {PipelineSteps}
  */
 export const PLACEHOLDER_STEPS = Object.freeze(
