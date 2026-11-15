@@ -89,6 +89,12 @@ describe('fetching step: failures → DOWNLOAD_FAILED', () => {
     expect((await failureCode(step)).code).toBe('DOWNLOAD_FAILED');
   });
 
+  it('the archive is over MAX_ZIP_BYTES → ARCHIVE_LIMIT_EXCEEDED, not DOWNLOAD_FAILED', async () => {
+    const tooLarge = Object.assign(new Error('GitHub unavailable'), { githubReason: 'TOO_LARGE' });
+    const { step } = setup({ github: { downloadArchive: vi.fn().mockRejectedValue(tooLarge) } });
+    expect((await failureCode(step)).code).toBe('ARCHIVE_LIMIT_EXCEEDED');
+  });
+
   it('the owner has no stored token; GitHub is not called', async () => {
     const { step, client } = setup({ user: { access_token_enc: null, token_key_id: null } });
     expect((await failureCode(step)).code).toBe('DOWNLOAD_FAILED');
