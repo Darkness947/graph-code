@@ -3,19 +3,8 @@ import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Tooltip from 'react-bootstrap/Tooltip';
 import { Link } from 'react-router-dom';
 import ProgressBlock from './ProgressBlock.jsx';
-import { SKIPPED_FILES } from './messages.js';
+import { formatDate, SKIPPED_FILES } from './messages.js';
 import { isAnalyzing } from './useRepositories.js';
-
-const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
-
-const formatSynced = (iso) => (iso ? DATE_FORMAT.format(new Date(iso)) : null);
 
 const BADGES = {
   ready: { text: 'Ready', className: 'repo-badge-ready' },
@@ -32,7 +21,7 @@ export default function RepoCard({ repo, onRetry, onRemove }) {
   const job = repo.latestJob;
   const skipped = job?.filesSkipped ?? 0;
   const languages = Object.keys(repo.languageSummary ?? {});
-  const synced = formatSynced(repo.lastIngestedAt);
+  const synced = repo.lastIngestedAt ? formatDate(repo.lastIngestedAt, { time: true }) : null;
 
   const retry = async () => {
     setRetrying(true);
@@ -42,18 +31,6 @@ export default function RepoCard({ repo, onRetry, onRemove }) {
       setRetrying(false);
     }
   };
-
-  const removeButton = (
-    <button
-      type="button"
-      className="btn btn-quiet repo-remove"
-      aria-label="Remove repository"
-      disabled={analyzing}
-      onClick={() => onRemove?.(repo)}
-    >
-      <i className="bi bi-trash" aria-hidden="true" />
-    </button>
-  );
 
   return (
     <article className="repo-card" aria-label={repo.displayName}>
@@ -105,15 +82,22 @@ export default function RepoCard({ repo, onRetry, onRemove }) {
             Open graph
           </button>
         )}
-        {analyzing ? (
-          <OverlayTrigger overlay={<Tooltip>Wait for analysis to finish</Tooltip>}>
-            <span className="repo-remove-wrap" tabIndex={0}>
-              {removeButton}
-            </span>
-          </OverlayTrigger>
-        ) : (
-          removeButton
-        )}
+        <OverlayTrigger
+          overlay={<Tooltip>Wait for analysis to finish</Tooltip>}
+          trigger={analyzing ? ['hover', 'focus'] : []}
+        >
+          <span className="repo-remove-wrap" tabIndex={analyzing ? 0 : undefined}>
+            <button
+              type="button"
+              className="btn btn-quiet repo-remove"
+              aria-label="Remove repository"
+              disabled={analyzing}
+              onClick={() => onRemove?.(repo)}
+            >
+              <i className="bi bi-trash" aria-hidden="true" />
+            </button>
+          </span>
+        </OverlayTrigger>
       </div>
     </article>
   );

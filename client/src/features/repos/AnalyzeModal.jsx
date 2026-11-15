@@ -3,12 +3,10 @@ import Modal from 'react-bootstrap/Modal';
 import Tab from 'react-bootstrap/Tab';
 import Tabs from 'react-bootstrap/Tabs';
 import { Link } from 'react-router-dom';
-import { addRepo, listGithubRepos } from '../../api/repos.js';
-import { addErrorMessage } from './messages.js';
+import { listGithubRepos } from '../../api/repos.js';
+import { formatDate } from './messages.js';
 import { parseRepoInput } from './repoInput.js';
-import { handleUnauthenticated } from './useRepositories.js';
-
-const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+import { handleUnauthenticated, tryAddRepo } from './useRepositories.js';
 
 /** Posts a repository and reports the new card to `onAdded`; failures become an inline error. */
 function useSubmit(onAdded) {
@@ -17,15 +15,10 @@ function useSubmit(onAdded) {
   const submit = async (repo) => {
     setBusy(true);
     setError(null);
-    try {
-      const result = await addRepo(repo);
-      onAdded(result.repository);
-    } catch (err) {
-      if (handleUnauthenticated(err)) return;
-      setError({ code: err.code, message: addErrorMessage(err), repositoryId: err.repositoryId });
-    } finally {
-      setBusy(false);
-    }
+    const result = await tryAddRepo(repo);
+    setBusy(false);
+    if (result.repository) onAdded(result.repository);
+    else if (result.error) setError(result.error);
   };
   return { busy, error, submit };
 }
@@ -95,9 +88,7 @@ function GithubTab({ onAdded }) {
               <span className="repo-name">{r.fullName}</span>
               {r.description && <span className="analyze-desc">{r.description}</span>}
               <span className="analyze-meta">
-                {[r.language, r.updatedAt && DATE.format(new Date(r.updatedAt))]
-                  .filter(Boolean)
-                  .join(' · ')}
+                {[r.language, r.updatedAt && formatDate(r.updatedAt)].filter(Boolean).join(' · ')}
               </span>
             </div>
             {r.alreadyAdded ? (

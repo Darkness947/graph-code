@@ -47,8 +47,28 @@ export function addErrorMessage(err) {
     case 'GITHUB_UNAVAILABLE':
       return "GitHub isn't responding right now. Try again in a moment.";
     default:
-      return 'Something went wrong. Try again.';
+      return GENERIC_ERROR;
   }
 }
+
+export const GENERIC_ERROR = 'Something went wrong. Try again.';
+
+const DATE_ONLY = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+const DATE_TIME = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+/** "12 Nov 2026" or, with `time`, "12 Nov 2026, 10:00" (browser time zone). */
+export const formatDate = (iso, { time = false } = {}) =>
+  (time ? DATE_TIME : DATE_ONLY).format(new Date(iso));
 
 export const SESSION_EXPIRED = 'Your session has expired. Please sign in again.';

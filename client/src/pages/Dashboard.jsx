@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { addRepo } from '../api/repos.js';
 import AnalyzeModal from '../features/repos/AnalyzeModal.jsx';
 import EmptyState from '../features/repos/EmptyState.jsx';
 import RepoCard from '../features/repos/RepoCard.jsx';
-import { addErrorMessage } from '../features/repos/messages.js';
-import { handleUnauthenticated, useRepositories } from '../features/repos/useRepositories.js';
+import { GENERIC_ERROR } from '../features/repos/messages.js';
+import { tryAddRepo, useRepositories } from '../features/repos/useRepositories.js';
 import { showToast } from '../store/toastStore.js';
 
 /** Dashboard (spec 8.5). Removing a repository arrives in T2.7. */
@@ -14,12 +13,9 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('');
 
   const retry = async (repo) => {
-    try {
-      const { repository } = await addRepo(`${repo.owner}/${repo.name}`);
-      upsert(repository);
-    } catch (err) {
-      if (!handleUnauthenticated(err)) showToast(addErrorMessage(err));
-    }
+    const { repository, error: failure } = await tryAddRepo(`${repo.owner}/${repo.name}`);
+    if (repository) upsert(repository);
+    else if (failure) showToast(failure.message);
   };
 
   const q = filter.trim().toLowerCase();
@@ -49,7 +45,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {items === null && error && <p role="alert">Something went wrong. Try again.</p>}
+      {items === null && error && <p role="alert">{GENERIC_ERROR}</p>}
       {items?.length === 0 && <EmptyState onAnalyze={() => setModal(true)} />}
       {items?.length > 0 && (
         <div className="repo-grid">

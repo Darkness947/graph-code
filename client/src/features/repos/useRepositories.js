@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { listRepos } from '../../api/repos.js';
+import { addRepo, listRepos } from '../../api/repos.js';
 import { useSessionStore } from '../auth/useSession.js';
 import { showToast } from '../../store/toastStore.js';
-import { SESSION_EXPIRED } from './messages.js';
+import { addErrorMessage, SESSION_EXPIRED } from './messages.js';
 
 export const POLL_MS = 1500;
 
@@ -25,6 +25,24 @@ export function handleUnauthenticated(err) {
 }
 
 /**
+ * Adds a repository (or retries a failed one), handling a mid-session 401 once for every caller.
+ * @param {string} repo `owner/name` or a github.com URL
+ * @returns {Promise<{ repository?: object, error?: { code: string, message: string, repositoryId?: string } }>}
+ *   `{}` when the session expired (the user is already being sent home)
+ */
+export async function tryAddRepo(repo) {
+  try {
+    const { repository } = await addRepo(repo);
+    return { repository };
+  } catch (err) {
+    if (handleUnauthenticated(err)) return {};
+    return {
+      error: { code: err.code, message: addErrorMessage(err), repositoryId: err.repositoryId },
+    };
+  }
+}
+
+/**
  * The user's repositories. Polls `GET /api/repos` every 1.5 s while any card is analyzing:
  * one request per tick, the next scheduled only after the previous one finishes.
  */
@@ -37,7 +55,8 @@ export function useRepositories() {
     try {
       const data = await listRepos();
       if (!alive.current) return;
-      setItems(data.items);
+      // Keep the same array when a poll brings nothing new, so the grid does not re-render.
+      setItems((cur) => (JSON.stringify(cur) === JSON.stringify(data.items) ? cur : data.items));
       setError(false);
     } catch (err) {
       if (!alive.current) return;
@@ -55,11 +74,16 @@ export function useRepositories() {
   }, [refresh]);
 
   const polling = items?.some(isAnalyzing) ?? false;
+  // Each tick waits for the previous request, then schedules the next one.
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!polling) return undefined;
-    const timer = setTimeout(refresh, POLL_MS);
+    const timer = setTimeout(async () => {
+      await refresh();
+      if (alive.current) setTick((t) => t + 1);
+    }, POLL_MS);
     return () => clearTimeout(timer);
-  }, [polling, items, refresh]);
+  }, [polling, tick, refresh]);
 
   /** Shows a just-added repository at the top, replacing any older card for it. */
   const upsert = useCallback((repo) => {
