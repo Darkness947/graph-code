@@ -2,7 +2,7 @@
 export class ApiError extends Error {
   /**
    * @param {number} status HTTP status; 0 when the request never reached the server.
-   * @param {{ code?: string, message?: string, requestId?: string }} [error]
+   * @param {{ code?: string, message?: string, requestId?: string, repositoryId?: string, jobId?: string, retryAfterSeconds?: number }} [error]
    */
   constructor(status, error = {}) {
     super(error.message ?? 'Something went wrong. Try again.');
@@ -10,6 +10,9 @@ export class ApiError extends Error {
     this.status = status;
     this.code = error.code ?? 'INTERNAL';
     this.requestId = error.requestId;
+    this.repositoryId = error.repositoryId;
+    this.jobId = error.jobId;
+    this.retryAfterSeconds = error.retryAfterSeconds;
   }
 }
 

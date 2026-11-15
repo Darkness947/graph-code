@@ -18,12 +18,15 @@ export const USER = {
  * The test file must mock `api/client.js` so that `request` is a `vi.fn()` and `ApiError`
  * stays real.
  * @param {{ me?: object | null | 'pending' | 'down', logout?: 'ok' | 'fail' | 'expired' }} [options]
+ *   `routes`: extra handlers keyed by API path, each `(options) => Promise`.
  *   `me`: a user object (signed in), `null` (401), `'pending'` (never answers) or `'down'`.
  */
-export function mockApi({ me = null, logout = 'ok' } = {}) {
+export function mockApi({ me = null, logout = 'ok', routes = {} } = {}) {
   useSessionStore.setState({ status: 'idle', user: null });
   dismissToast();
-  vi.mocked(request).mockImplementation((path) => {
+  vi.mocked(request).mockImplementation((path, options) => {
+    if (routes[path]) return routes[path](options);
+    if (path === '/repos') return Promise.resolve({ items: [] });
     if (path === '/me') {
       if (me === 'pending') return new Promise(() => {});
       if (me === 'down') return Promise.reject(new ApiError(0));

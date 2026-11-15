@@ -530,3 +530,182 @@ h2 {
   padding: 32px 24px;
   margin: 0 auto;
 }
+
+/* Dashboard (spec 8.5) */
+.dash-header {
+  display: grid;
+  grid-template-columns: 1fr minmax(240px, 360px) 1fr;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.dash-header .btn {
+  justify-self: end;
+}
+
+.repo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (width >= 1400px) {
+  .repo-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.repo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.repo-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.repo-name {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.repo-badge,
+.repo-lang {
+  padding: 1px 8px;
+  font-size: var(--font-size-small);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+
+.repo-lang {
+  color: var(--text-secondary);
+}
+
+.repo-badge-ready {
+  color: var(--success-green);
+  border-color: var(--success-green);
+}
+
+.repo-badge-analyzing {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.repo-badge-failed {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.repo-meta,
+.repo-progress-label,
+.repo-progress-tier {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.repo-progress-bar {
+  height: 6px;
+  background: var(--node-default);
+}
+
+.repo-progress-bar .progress-bar {
+  background-color: var(--progress-amber);
+}
+
+.repo-progress-label {
+  margin-top: 8px;
+}
+
+.repo-failed {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.repo-failed i {
+  color: var(--danger);
+}
+
+.repo-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  margin-top: auto;
+}
+
+.repo-remove {
+  opacity: 0.5;
+}
+
+.repo-card:hover .repo-remove,
+.repo-card:focus-within .repo-remove {
+  opacity: 1;
+}
+
+.repo-empty {
+  max-width: 460px;
+  padding: 64px 0;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.repo-empty i {
+  font-size: 40px;
+  color: var(--text-secondary);
+}
+
+.repo-empty p {
+  color: var(--text-secondary);
+}
+
+.analyze-modal {
+  max-width: 640px;
+}
+
+.analyze-list {
+  padding: 0;
+  margin: 0 0 12px;
+  list-style: none;
+}
+
+.analyze-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.analyze-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.analyze-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analyze-meta,
+.analyze-added {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.analyze-error {
+  margin: 12px 0 0;
+}
