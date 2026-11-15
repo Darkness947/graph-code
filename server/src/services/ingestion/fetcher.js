@@ -14,6 +14,7 @@ import { IngestionError } from './IngestionError.js';
  */
 export function createFetchingStep({ pool, crypto, github }) {
   return async function fetching(ctx) {
+    // No signed-in user here: the job runs with the token of the repository's own owner.
     const { rows } = await pool.query(
       'SELECT user_id, owner, name, default_branch FROM repositories WHERE id = $1',
       [ctx.job.repositoryId],

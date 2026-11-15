@@ -10,7 +10,7 @@ import { createDefaultRegistry } from '../../src/services/ingestion/languages/la
 import { ARCHIVE_ROOT, buildZip, renameEntry } from '../helpers/zip.js';
 
 const limits = (over = {}) => ({ ...DEFAULT_LIMITS, ...over });
-const extract = (zip, over) => extractArchive(zip, { limits: limits(over) });
+const extract = (zip, over) => extractArchive(zip, { limits: limits(over), registry });
 const paths = (list) => list.map((f) => f.path).sort();
 const registry = createDefaultRegistry();
 
@@ -97,6 +97,16 @@ describe('extractArchive: limits (AC2)', () => {
     const zip = await buildZip({ 'big.js': 'x'.repeat(11), 'ok.ts': 'y' }, { compress: false });
     const result = await extract(zip, { maxFileBytes: 10, maxSourceFiles: 1 });
     expect(paths(result.files)).toEqual(['ok.ts']);
+  });
+
+  it('an oversized root configuration file is reported as too_large, not kept', async () => {
+    const zip = await buildZip(
+      { 'tsconfig.json': 'x'.repeat(11), 'a.ts': 'y' },
+      { compress: false },
+    );
+    const result = await extract(zip, { maxFileBytes: 10 });
+    expect(result.configFiles).toEqual([]);
+    expect(result.skipped).toEqual([{ path: 'tsconfig.json', reason: 'too_large' }]);
   });
 
   it('only too_large files → NO_SUPPORTED_FILES', async () => {

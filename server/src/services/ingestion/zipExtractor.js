@@ -1,6 +1,5 @@
 import yauzl from 'yauzl';
 import { IngestionError } from './IngestionError.js';
-import { createDefaultRegistry } from './languages/languageRegistry.js';
 
 /** Directories skipped at any depth (spec 7.5 step 2); `__tests__` is the test-file rule. */
 const SKIPPED_DIRECTORIES = new Set([
@@ -21,7 +20,8 @@ const TEST_FILE_RE = /.\.(?:test|spec)\../;
  * @typedef {object} ExtractedArchive
  * @property {{ path: string, content: string }[]} files supported source files, repository-relative
  * @property {{ path: string, content: string }[]} configFiles root configuration files
- * @property {{ path: string, reason: 'too_large' }[]} skipped supported files that were not kept
+ * @property {{ path: string, reason: 'too_large' }[]} skipped source and configuration files
+ *   that were not kept
  */
 
 /**
@@ -47,7 +47,7 @@ export function repositoryPath(entryName) {
 /**
  * Classifies a repository-relative path without looking at its content (spec 7.5 step 2).
  * @param {string} path
- * @param {ReturnType<typeof createDefaultRegistry>} registry
+ * @param {ReturnType<typeof import('./languages/languageRegistry.js').createLanguageRegistry>} registry
  * @param {Set<string>} configNames the registry's configuration file names
  * @returns {'source' | 'config' | 'skip'}
  */
@@ -65,12 +65,12 @@ function classifyPath(path, registry, configNames) {
  * is executed. Entries the skip rules drop are never inflated.
  * @param {Buffer} buffer the ZIP
  * @param {{ limits: import('./limits.js').IngestionLimits,
- *   registry?: ReturnType<typeof createDefaultRegistry> }} options
+ *   registry: ReturnType<typeof import('./languages/languageRegistry.js').createLanguageRegistry> }} options
  * @returns {Promise<ExtractedArchive>}
  * @throws {IngestionError} ARCHIVE_INVALID, ARCHIVE_LIMIT_EXCEEDED, REPO_TOO_LARGE or
  *   NO_SUPPORTED_FILES
  */
-export async function extractArchive(buffer, { limits, registry = createDefaultRegistry() }) {
+export async function extractArchive(buffer, { limits, registry }) {
   let zip;
   try {
     zip = await openZip(buffer);
@@ -84,7 +84,7 @@ export async function extractArchive(buffer, { limits, registry = createDefaultR
     const result = { files: [], configFiles: [], skipped: [] };
     let totalBytes = 0;
     /** Kept paths: two entries for one path would become two nodes for one file. */
-    const seen = new Set();
+    const keptPaths = new Set();
     const configNames = new Set(registry.configFileNames());
 
     let entry;
@@ -100,12 +100,13 @@ export async function extractArchive(buffer, { limits, registry = createDefaultR
       if (path === null) continue;
       const kind = classifyPath(path, registry, configNames);
       if (kind === 'skip') continue;
-      if (seen.has(path)) {
+      if (keptPaths.has(path)) {
         throw new IngestionError('ARCHIVE_INVALID', 'two entries have the same path');
       }
-      seen.add(path);
+      keptPaths.add(path);
       if (entry.uncompressedSize > limits.maxFileBytes) {
-        if (kind === 'source') result.skipped.push({ path, reason: 'too_large' });
+        // Also an oversized configuration file, so a lost tsconfig shows in the report.
+        result.skipped.push({ path, reason: 'too_large' });
         continue;
       }
       if (kind === 'source' && result.files.length >= limits.maxSourceFiles) {
@@ -188,7 +189,7 @@ function inflate(zip, entry, budget) {
  * The extracting step (spec 7.5 step 2). Leaves `ctx.files`, `ctx.configFiles` and `ctx.skipped`,
  * sets `files_total`, and drops the archive so it can be garbage-collected.
  * @param {{ limits: import('./limits.js').IngestionLimits,
- *   registry: ReturnType<typeof createDefaultRegistry> }} deps
+ *   registry: ReturnType<typeof import('./languages/languageRegistry.js').createLanguageRegistry> }} deps
  * @returns {import('./orchestrator.js').PipelineStep}
  */
 export function createExtractingStep({ limits, registry }) {
