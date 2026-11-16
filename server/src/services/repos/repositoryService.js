@@ -42,6 +42,44 @@ function jobActive(jobId) {
   return new AppError('JOB_ACTIVE', 'This repository is already being analyzed.', { jobId });
 }
 
+/** Statuses of a job that blocks a new job or a delete (matches `one_active_job_per_repo`). */
+const ACTIVE_JOB = `status IN ('queued', 'running')`;
+
+/**
+ * @param {Pick<import('pg').Pool, 'query'>} db a pool or a client inside a transaction
+ * @param {string} repoId
+ * @returns {Promise<string | null>} the repository's queued or running job, if any
+ */
+async function findActiveJobId(db, repoId) {
+  const { rows } = await db.query(
+    `SELECT id FROM ingestion_jobs WHERE repository_id = $1 AND ${ACTIVE_JOB}`,
+    [repoId],
+  );
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Runs `fn` with a client inside BEGIN/COMMIT; rolls back and rethrows on any error.
+ * @template T
+ * @param {import('pg').Pool} pool
+ * @param {(client: import('pg').PoolClient) => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+async function withTransaction(pool, fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * Repository data access and the add flow (spec 7.5). Every query is scoped to the user.
  * @param {import('pg').Pool} pool
@@ -92,57 +130,46 @@ export function createRepositoryService(pool) {
     const owner = meta.owner.toLowerCase();
     const name = meta.name.toLowerCase();
     const displayName = `${meta.owner}/${meta.name}`;
-    const client = await pool.connect();
     let repoId;
     try {
-      await client.query('BEGIN');
-      // Creates the row if absent; a concurrent insert waits for the other transaction.
-      await client.query(
-        `INSERT INTO repositories (user_id, github_repo_id, owner, name, display_name, default_branch, visibility)
-         VALUES ($1, $2, $3, $4, $5, $6, 'public')
-         ON CONFLICT (user_id, owner, name) DO NOTHING`,
-        [userId, meta.id, owner, name, displayName, meta.defaultBranch],
-      );
-      const { rows } = await client.query(
-        `SELECT id, status FROM repositories WHERE user_id = $1 AND owner = $2 AND name = $3 FOR UPDATE`,
-        [userId, owner, name],
-      );
-      const repo = rows[0];
-      repoId = repo.id;
-      if (repo.status === 'ready') {
-        throw new AppError('REPO_ALREADY_ANALYZED', "You've already analyzed this repository.", {
-          repositoryId: repo.id,
-        });
-      }
-      const active = await client.query(
-        `SELECT id FROM ingestion_jobs WHERE repository_id = $1 AND status IN ('queued', 'running')`,
-        [repo.id],
-      );
-      if (active.rowCount > 0) throw jobActive(active.rows[0].id);
+      await withTransaction(pool, async (client) => {
+        // Creates the row if absent; a concurrent insert waits for the other transaction.
+        await client.query(
+          `INSERT INTO repositories (user_id, github_repo_id, owner, name, display_name, default_branch, visibility)
+           VALUES ($1, $2, $3, $4, $5, $6, 'public')
+           ON CONFLICT (user_id, owner, name) DO NOTHING`,
+          [userId, meta.id, owner, name, displayName, meta.defaultBranch],
+        );
+        const { rows } = await client.query(
+          `SELECT id, status FROM repositories WHERE user_id = $1 AND owner = $2 AND name = $3 FOR UPDATE`,
+          [userId, owner, name],
+        );
+        const repo = rows[0];
+        repoId = repo.id;
+        if (repo.status === 'ready') {
+          throw new AppError('REPO_ALREADY_ANALYZED', "You've already analyzed this repository.", {
+            repositoryId: repo.id,
+          });
+        }
+        const activeId = await findActiveJobId(client, repo.id);
+        if (activeId) throw jobActive(activeId);
 
-      await client.query(
-        `UPDATE repositories SET status = 'analyzing', github_repo_id = $2, display_name = $3, default_branch = $4
-         WHERE id = $1`,
-        [repo.id, meta.id, displayName, meta.defaultBranch],
-      );
-      await client.query(
-        `INSERT INTO ingestion_jobs (repository_id, job_type) VALUES ($1, 'initial')`,
-        [repo.id],
-      );
-      await client.query('COMMIT');
+        await client.query(
+          `UPDATE repositories SET status = 'analyzing', github_repo_id = $2, display_name = $3, default_branch = $4
+           WHERE id = $1`,
+          [repo.id, meta.id, displayName, meta.defaultBranch],
+        );
+        await client.query(
+          `INSERT INTO ingestion_jobs (repository_id, job_type) VALUES ($1, 'initial')`,
+          [repo.id],
+        );
+      });
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
       // The one-active-job index fired: another request won the race.
       if (err?.code === '23505' && err.constraint === 'one_active_job_per_repo') {
-        const { rows } = await pool.query(
-          `SELECT id FROM ingestion_jobs WHERE repository_id = $1 AND status IN ('queued', 'running')`,
-          [repoId],
-        );
-        throw jobActive(rows[0]?.id ?? null);
+        throw jobActive(await findActiveJobId(pool, repoId));
       }
       throw err;
-    } finally {
-      client.release();
     }
     // Read after the connection is released, so one request never holds two.
     const repository = await get(userId, repoId);
@@ -157,30 +184,23 @@ export function createRepositoryService(pool) {
    * @returns {Promise<void>} throws NOT_FOUND (also for another user's) or JOB_ACTIVE
    */
   async function remove(userId, repoId) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const { rowCount } = await client.query(
-        'SELECT id FROM repositories WHERE id = $1 AND user_id = $2 FOR UPDATE',
+    await withTransaction(pool, async (client) => {
+      // Locks the user's row and finds any active job in one round trip.
+      const { rows } = await client.query(
+        `SELECT r.id, j.id AS active_job_id
+         FROM repositories r
+         LEFT JOIN ingestion_jobs j ON j.repository_id = r.id AND j.${ACTIVE_JOB}
+         WHERE r.id = $1 AND r.user_id = $2
+         FOR UPDATE OF r`,
         [repoId, userId],
       );
-      if (rowCount === 0) throw new AppError('NOT_FOUND', 'Repository not found.');
-      const active = await client.query(
-        `SELECT id FROM ingestion_jobs WHERE repository_id = $1 AND status IN ('queued', 'running')`,
-        [repoId],
-      );
-      if (active.rowCount > 0) throw jobActive(active.rows[0].id);
+      if (rows.length === 0) throw new AppError('NOT_FOUND', 'Repository not found.');
+      if (rows[0].active_job_id) throw jobActive(rows[0].active_job_id);
       await client.query('DELETE FROM repositories WHERE id = $1 AND user_id = $2', [
         repoId,
         userId,
       ]);
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   return { list, get, addedKeys, addOrRetry, remove };

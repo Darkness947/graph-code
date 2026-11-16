@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Modal from 'react-bootstrap/Modal';
 import { deleteRepo } from '../../api/repos.js';
-import { GENERIC_ERROR, REMOVE_CONFIRM, addErrorMessage } from './messages.js';
+import { REMOVE_CONFIRM, removeErrorMessage } from './messages.js';
 import { handleUnauthenticated } from './useRepositories.js';
 
 /**
@@ -16,9 +16,7 @@ export default function RemoveRepoModal({ repo, onHide, onRemoved, onBlocked }) 
   if (repo && repo !== shown) setShown(repo);
 
   const close = () => {
-    if (busy) return;
-    setError(null);
-    onHide();
+    if (!busy) onHide();
   };
 
   const remove = async () => {
@@ -26,19 +24,15 @@ export default function RemoveRepoModal({ repo, onHide, onRemoved, onBlocked }) 
     setError(null);
     try {
       await deleteRepo(repo.id);
-      setBusy(false);
       onRemoved(repo);
     } catch (err) {
-      setBusy(false);
       if (handleUnauthenticated(err)) return onHide();
       // Already gone (removed elsewhere): the outcome the user asked for.
       if (err?.status === 404) return onRemoved(repo);
-      if (err?.code === 'JOB_ACTIVE') {
-        setError(addErrorMessage(err));
-        onBlocked?.(repo);
-      } else {
-        setError(GENERIC_ERROR);
-      }
+      setError(removeErrorMessage(err));
+      if (err?.code === 'JOB_ACTIVE') onBlocked(repo);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -57,7 +51,7 @@ export default function RemoveRepoModal({ repo, onHide, onRemoved, onBlocked }) 
           </p>
         )}
         {error && (
-          <p className="mt-3 mb-0" role="alert">
+          <p className="modal-inline-error" role="alert">
             {error}
           </p>
         )}

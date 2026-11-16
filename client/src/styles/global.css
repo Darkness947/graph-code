@@ -720,6 +720,6 @@ h2 {
   color: var(--text-secondary);
 }
 
-.analyze-error {
+.modal-inline-error {
   margin: 12px 0 0;
 }

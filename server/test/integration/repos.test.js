@@ -296,7 +296,8 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
   });
 
   describe('DELETE /api/repos/:id', { timeout: 60000 }, () => {
-    const CHILD_TABLES = [
+    const TABLES = [
+      ['repositories', 'id = $1'],
       ['ingestion_jobs', 'repository_id = $1'],
       ['nodes', 'repository_id = $1'],
       ['edges', 'repository_id = $1'],
@@ -308,11 +309,7 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
     /** Row counts for the repository and every child table. */
     async function countRows(repoId) {
       const counts = {};
-      const repo = await pool.query('SELECT count(*)::int AS n FROM repositories WHERE id = $1', [
-        repoId,
-      ]);
-      counts.repositories = repo.rows[0].n;
-      for (const [table, where] of CHILD_TABLES) {
+      for (const [table, where] of TABLES) {
         const { rows } = await pool.query(
           `SELECT count(*)::int AS n FROM ${table} WHERE ${where}`,
           [repoId],

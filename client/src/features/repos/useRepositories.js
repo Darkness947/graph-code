@@ -50,16 +50,17 @@ export function useRepositories() {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(false);
   const alive = useRef(true);
-  // Ids removed in this view: a poll that left before the delete must not bring them back.
-  const removed = useRef(new Set());
+  // Counts local changes (add, retry, remove). A list fetched across a change is stale and dropped,
+  // so a poll that left before it cannot undo it; the next poll brings the fresh list.
+  const mutations = useRef(0);
 
   const refresh = useCallback(async () => {
+    const started = mutations.current;
     try {
       const data = await listRepos();
-      if (!alive.current) return;
-      const next = data.items.filter((r) => !removed.current.has(r.id));
+      if (!alive.current || mutations.current !== started) return;
       // Keep the same array when a poll brings nothing new, so the grid does not re-render.
-      setItems((cur) => (JSON.stringify(cur) === JSON.stringify(next) ? cur : next));
+      setItems((cur) => (JSON.stringify(cur) === JSON.stringify(data.items) ? cur : data.items));
       setError(false);
     } catch (err) {
       if (!alive.current) return;
@@ -90,12 +91,13 @@ export function useRepositories() {
 
   /** Shows a just-added repository at the top, replacing any older card for it. */
   const upsert = useCallback((repo) => {
+    mutations.current += 1;
     setItems((cur) => [repo, ...(cur ?? []).filter((r) => r.id !== repo.id)]);
   }, []);
 
-  /** Drops a removed repository's card and keeps it out of later polls. */
+  /** Drops a removed repository's card. */
   const remove = useCallback((id) => {
-    removed.current.add(id);
+    mutations.current += 1;
     setItems((cur) => (cur ?? []).filter((r) => r.id !== id));
   }, []);
 

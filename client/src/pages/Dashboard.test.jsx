@@ -171,6 +171,55 @@ describe('Dashboard (spec 8.5)', () => {
     expect(await screen.findByText('Analyzing')).toBeInTheDocument();
   });
 
+  it('a poll that started before Try again does not undo the retry', async () => {
+    const failed = repo({
+      status: 'failed',
+      latestJob: job({ status: 'failed', errorCode: 'INTERNAL', errorMessage: 'Boom.' }),
+    });
+    const other = repo({
+      id: 'r2',
+      owner: 'acme',
+      name: 'tools',
+      displayName: 'acme/tools',
+      status: 'analyzing',
+      latestJob: job({ id: 'j2' }),
+    });
+    const started = repo({ status: 'analyzing', latestJob: job({ id: 'j3' }) });
+    let release;
+    let calls = 0;
+    mockApi({
+      me: USER,
+      routes: {
+        '/repos': (o) => {
+          if (o?.method === 'POST')
+            return Promise.resolve({ repository: started, job: started.latestJob });
+          calls += 1;
+          if (calls === 1) return Promise.resolve({ items: [failed, other] });
+          return new Promise((r) => {
+            release = () => r({ items: [failed, other] });
+          });
+        },
+      },
+    });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/dashboard');
+
+    const card = await screen.findByRole('article', { name: 'vercel/next-learn' });
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(calls).toBe(2);
+    await user.click(within(card).getByRole('button', { name: 'Try again' }));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('article', { name: 'vercel/next-learn' })).getByText('Analyzing'),
+      ).toBeInTheDocument(),
+    );
+    await act(async () => release());
+    const after = screen.getByRole('article', { name: 'vercel/next-learn' });
+    expect(within(after).getByText('Analyzing')).toBeInTheDocument();
+    expect(within(after).queryByText('Boom.')).not.toBeInTheDocument();
+  });
+
   it('filters cards client-side', async () => {
     mockApi({
       me: USER,
