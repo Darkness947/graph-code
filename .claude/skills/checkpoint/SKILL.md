@@ -23,7 +23,7 @@ Merged since the last checkpoint: !`git log --oneline -30 2>/dev/null || echo "n
 3. **Measure the facts.** Ask me for any measurement you cannot take yourself:
    - pinned tree-sitter versions and the parser backend (`PARSER_BACKEND`)
    - the confirmed `GEMINI_MODELS` (from `ai:ping`)
-   - ingestion timings on the deployed site (the one test repository, `Darkness947/vigilante-resume-tailor`, 63 files; report the time per 100 files)
+   - ingestion timings on the deployed site (the one test repository, `Darkness947/vigilante-resume-tailor`, 70 source files after the skip rules; report the time per 100 files)
    - AI latency for a cached and a fresh analysis
 4. **Write the report.** Write `docs/checkpoints/increment-$0.md` in the spec's Part 1.5 format, extended:
 
