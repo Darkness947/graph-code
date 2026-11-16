@@ -295,7 +295,7 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
     });
   });
 
-  describe('DELETE /api/repos/:id', { timeout: 60000 }, () => {
+  describe('DELETE /api/repos/:id', () => {
     const TABLES = [
       ['repositories', 'id = $1'],
       ['ingestion_jobs', 'repository_id = $1'],
