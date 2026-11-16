@@ -61,6 +61,6 @@ export function createApp(config, options = {}) {
   app.use('/api', api);
 
   app.use(notFoundHandler);
-  app.use(createErrorHandler(config));
+  app.use(createErrorHandler(config, { pool }));
   return app;
 }

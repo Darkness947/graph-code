@@ -74,6 +74,14 @@ function checkSha(sha) {
   if (typeof sha !== 'string' || !SHA_RE.test(sha)) throw invalid('commit SHA');
 }
 
+/** GitHub refused the user's token (revoked or reset): the session cannot be used any more. */
+function tokenRejected() {
+  const err = new AppError('UNAUTHENTICATED', 'Please sign in to continue.');
+  err.githubReason = 'TOKEN_REJECTED';
+  err.githubStatus = 401;
+  return err;
+}
+
 function unavailable(reason, status) {
   const err = new AppError('GITHUB_UNAVAILABLE', "GitHub isn't responding right now.");
   err.githubReason = reason;
@@ -86,14 +94,19 @@ function unavailable(reason, status) {
  * redirects are followed by hand (max 3, each target re-checked), and a failed attempt is
  * retried once on network errors and 5xx, never on 4xx. Tokens and headers are never logged.
  *
- * Failures are `AppError`s: `REPO_NOT_FOUND_ON_GITHUB` for 404, `GITHUB_UNAVAILABLE` otherwise.
- * `err.githubReason` is one of `NETWORK`, `SERVER`, `CLIENT`, `REDIRECT`, `BLOCKED`, `TOO_LARGE`.
+ * Failures are `AppError`s: `REPO_NOT_FOUND_ON_GITHUB` for 404, `UNAUTHENTICATED` for a 401 on a
+ * request that carried the user's token, `GITHUB_UNAVAILABLE` otherwise.
+ * `err.githubReason` is one of `NETWORK`, `SERVER`, `CLIENT`, `REDIRECT`, `BLOCKED`, `TOO_LARGE`,
+ * `TOKEN_REJECTED`.
  *
  * @param {{ maxZipBytes: number }} options
  * @param {{ request: Function }} [http] axios-compatible; injectable for tests
  */
 export function createGithubClient({ maxZipBytes }, http = axios) {
-  /** One attempt, following redirects manually. Returns the final response or throws. */
+  /**
+   * One attempt, following redirects manually. Returns the final response, and whether the
+   * token was sent with it, or throws.
+   */
   async function attempt(startUrl, opts) {
     let url = assertAllowedUrl(startUrl);
     const origin = url.hostname;
@@ -121,7 +134,7 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
         url = assertAllowedUrl(new URL(location, url));
         continue;
       }
-      return res;
+      return { res, sentToken: sendToken && Boolean(headers.Authorization) };
     }
   }
 
@@ -130,8 +143,9 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
     let lastStatus;
     for (let tryNo = 0; tryNo < 2; tryNo++) {
       let res;
+      let sentToken;
       try {
-        res = await attempt(url, opts);
+        ({ res, sentToken } = await attempt(url, opts));
       } catch (err) {
         if (err instanceof AppError) throw err; // blocked / redirect limit: never retried
         if (/maxContentLength|maxBodyLength/i.test(String(err?.message))) {
@@ -153,6 +167,7 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
           "We couldn't find that repository on GitHub. Check the owner and name.",
         );
       }
+      if (res.status === 401 && sentToken) throw tokenRejected();
       throw unavailable('CLIENT', res.status);
     }
     throw unavailable(lastReason, lastStatus);
