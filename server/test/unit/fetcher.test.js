@@ -73,6 +73,14 @@ describe('fetching step: failures → DOWNLOAD_FAILED', () => {
     expect(client.downloadArchive).not.toHaveBeenCalled();
   });
 
+  it('GitHub rejects the owner token (TOKEN_REJECTED) → DOWNLOAD_FAILED', async () => {
+    const rejected = Object.assign(new AppError('UNAUTHENTICATED', 'x'), {
+      githubReason: 'TOKEN_REJECTED',
+    });
+    const { step } = setup({ github: { getHeadCommit: vi.fn().mockRejectedValue(rejected) } });
+    expect((await failureCode(step)).code).toBe('DOWNLOAD_FAILED');
+  });
+
   it('the repository is gone from GitHub', async () => {
     const { step } = setup({
       github: {

@@ -1,4 +1,5 @@
 import { AppError } from '../errors/AppError.js';
+import { destroySession } from './session.js';
 
 /**
  * 404 for any route that did not match (standard error shape).
@@ -12,17 +13,30 @@ export function notFoundHandler(req, res, next) {
  * Central error handler (spec 7.1). Maps AppError to Part 6.1 and everything else to INTERNAL.
  * The response never contains a stack trace, SQL or an internal path. Details are logged on the
  * server with the request ID.
+ *
+ * GitHub failures are logged with the request method and path plus GitHub's reason and status
+ * (never tokens, GitHub URLs or headers). When GitHub rejects the signed-in user's token, the
+ * stored token and every session of that user are deleted, so the client's 401 handling sends the
+ * user to sign in again on every device.
  * @param {{ NODE_ENV: string }} config
+ * @param {{ pool?: import('pg').Pool }} [deps]
  * @returns {import('express').ErrorRequestHandler}
  */
-export function createErrorHandler(config) {
+export function createErrorHandler(config, { pool } = {}) {
   // Express identifies error handlers by their four parameters.
-  return (err, req, res, next) => {
+  return async (err, req, res, next) => {
     if (res.headersSent) return next(err);
 
     let appError;
     if (err instanceof AppError) {
       appError = err;
+      if (err.githubReason) {
+        const status = err.githubStatus === undefined ? '' : ` status=${err.githubStatus}`;
+        console.error(
+          `[${req.id}] github failure on ${req.method} ${req.path}: reason=${err.githubReason}${status}`,
+        );
+      }
+      if (err.githubReason === 'TOKEN_REJECTED') await forgetRejectedToken(req, res, config, pool);
     } else if (err?.type === 'entity.parse.failed') {
       appError = new AppError('VALIDATION_ERROR', 'The request body is not valid JSON.');
     } else if (err?.type === 'entity.too.large') {
@@ -56,4 +70,23 @@ export function createErrorHandler(config) {
       },
     });
   };
+}
+
+/**
+ * Deletes the signed-in user's stored GitHub token and all of their sessions (other devices would
+ * otherwise stay "signed in" with no usable token), then destroys this request's session.
+ * Failures are logged and swallowed: the caller still answers 401.
+ */
+async function forgetRejectedToken(req, res, config, pool) {
+  try {
+    if (pool && req.user?.id) {
+      await pool.query('UPDATE users SET access_token_enc = NULL WHERE id = $1', [req.user.id]);
+      await pool.query("DELETE FROM session WHERE sess->>'userId' = $1", [req.user.id]);
+    }
+    await destroySession(req, res, config);
+  } catch (e) {
+    console.error(
+      `[${req.id}] could not end the session after a rejected token: ${e?.name ?? 'Error'}`,
+    );
+  }
 }

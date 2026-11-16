@@ -410,4 +410,68 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
       expect(res.body.error.details[0].message).toBe('page must be a whole number from 1 to 10000');
     });
   });
+
+  describe('GitHub rejects the stored token', () => {
+    const rejected = () =>
+      Object.assign(new AppError('UNAUTHENTICATED', 'Please sign in to continue.'), {
+        githubReason: 'TOKEN_REJECTED',
+        githubStatus: 401,
+      });
+
+    it.each([
+      ['GET /api/github/repos', (c) => request(app).get('/api/github/repos').set('Cookie', c)],
+      ['POST /api/repos', (c) => post(c, 'a/b')],
+    ])(
+      '%s: 401 UNAUTHENTICATED, token deleted, session ended, logged without the token',
+      async (_, call) => {
+        const cookie = await signIn(203);
+        github.listUserRepositories.mockRejectedValue(rejected());
+        github.getRepository.mockRejectedValue(rejected());
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          const res = await call(cookie);
+          expect(res.status).toBe(401);
+          expect(res.body.error.code).toBe('UNAUTHENTICATED');
+
+          const { rows } = await pool.query(
+            'SELECT access_token_enc FROM users WHERE github_id = 203',
+          );
+          expect(rows[0].access_token_enc).toBeNull();
+          expect((await request(app).get('/api/me').set('Cookie', cookie)).status).toBe(401);
+
+          const lines = log.mock.calls.map((c) => c.join(' '));
+          expect(
+            lines.some((l) => /github failure on .*reason=TOKEN_REJECTED status=401/.test(l)),
+          ).toBe(true);
+          expect(lines.join(' ')).not.toContain('gho_203');
+        } finally {
+          log.mockRestore();
+        }
+        // Other users keep their sessions.
+        expect((await request(app).get('/api/me').set('Cookie', cookieA)).status).toBe(200);
+      },
+    );
+
+    it("ends the same user's sessions on other devices too", async () => {
+      const deviceA = await signIn(205);
+      const deviceB = await signIn(205);
+      github.listUserRepositories.mockRejectedValue(rejected());
+      vi.spyOn(console, 'error').mockImplementationOnce(() => {});
+      expect((await request(app).get('/api/github/repos').set('Cookie', deviceA)).status).toBe(401);
+      expect((await request(app).get('/api/me').set('Cookie', deviceB)).status).toBe(401);
+      expect((await request(app).get('/api/me').set('Cookie', cookieA)).status).toBe(200);
+    });
+
+    it('signing in again stores a fresh token', async () => {
+      const cookie = await signIn(204);
+      github.listUserRepositories.mockRejectedValue(rejected());
+      vi.spyOn(console, 'error').mockImplementationOnce(() => {});
+      await request(app).get('/api/github/repos').set('Cookie', cookie);
+      const again = await signIn(204);
+      github.listUserRepositories.mockResolvedValue([]);
+      const res = await request(app).get('/api/github/repos').set('Cookie', again);
+      expect(res.status).toBe(200);
+      expect(github.listUserRepositories).toHaveBeenLastCalledWith('gho_204', 1);
+    });
+  });
 });

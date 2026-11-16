@@ -58,7 +58,8 @@ describe('ProtectedRoute (spec 8.2)', () => {
     vi.mocked(request).mockResolvedValue(USER); // the server is back
     await user.click(screen.getByRole('link', { name: 'Back to home' }));
 
-    // The landing page re-checks the session, finds the user and redirects to the dashboard.
+    // The landing page re-checks the session and finds the user, so it offers the dashboard.
+    await user.click(await screen.findByRole('link', { name: 'Go to dashboard' }));
     expect(await screen.findByRole('heading', { name: 'Your Repositories' })).toBeInTheDocument();
   });
 });

@@ -170,6 +170,32 @@ describe('central error handler', () => {
     expect(res.body.error.requestId).toBeTruthy();
   });
 
+  it('still answers 401 when forgetting a rejected token fails, logging only the error name', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const err = Object.assign(new AppError('UNAUTHENTICATED', 'Please sign in to continue.'), {
+      githubReason: 'TOKEN_REJECTED',
+      githubStatus: 401,
+    });
+    const pool = {
+      query: vi.fn().mockRejectedValue(new Error('connect to postgres://u:pw@h failed')),
+    };
+    const app = express();
+    app.use(attachRequestId);
+    app.get('/boom', (req) => {
+      req.user = { id: 'user-1' };
+      throw err;
+    });
+    app.use(createErrorHandler(config, { pool }));
+
+    const res = await request(app).get('/boom');
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHENTICATED');
+    const lines = log.mock.calls.map((c) => c.join(' ')).join(' ');
+    expect(lines).toContain('could not end the session after a rejected token: Error');
+    expect(lines).not.toContain('pw@h');
+    log.mockRestore();
+  });
+
   it('maps a plain Error to 500 INTERNAL without leaking its message or stack', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const err = new Error('SELECT * FROM users WHERE secret=hunter2 at /srv/app/db.js:12');

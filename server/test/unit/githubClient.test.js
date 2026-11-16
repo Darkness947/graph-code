@@ -261,7 +261,42 @@ describe('timeouts and retries (AC2, spec 7.4)', () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it.each([401, 403, 422, 429])('does not retry a %i', async (status) => {
+  it('maps a 401 on a request with a token to UNAUTHENTICATED (TOKEN_REJECTED), no retry', async () => {
+    const { client, request } = make(ok({}, 401), ok(repoJson));
+    await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+      status: 401,
+      githubReason: 'TOKEN_REJECTED',
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps a 401 from listUserRepositories to UNAUTHENTICATED', async () => {
+    const { client } = make(ok({}, 401));
+    await expect(client.listUserRepositories('t', 1)).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+      githubReason: 'TOKEN_REJECTED',
+    });
+  });
+
+  it('keeps a 401 on a request without a token as GITHUB_UNAVAILABLE', async () => {
+    const { client } = make(ok({}, 401));
+    await expect(client.getRepository(null, 'octo', 'hello')).rejects.toMatchObject({
+      code: 'GITHUB_UNAVAILABLE',
+      githubReason: 'CLIENT',
+      githubStatus: 401,
+    });
+  });
+
+  it('keeps a 401 after a redirect that dropped the token as GITHUB_UNAVAILABLE', async () => {
+    const { client } = make(redirect('https://codeload.github.com/x'), ok({}, 401));
+    await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
+      code: 'GITHUB_UNAVAILABLE',
+      githubReason: 'CLIENT',
+    });
+  });
+
+  it.each([403, 422, 429])('does not retry a %i', async (status) => {
     const { client, request } = make(ok({}, status), ok(repoJson));
     await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
       code: 'GITHUB_UNAVAILABLE',

@@ -26,6 +26,8 @@ export function createFetchingStep({ pool, crypto, github }) {
     const token = await getUserToken(pool, crypto, userId);
     if (!token) throw new IngestionError('DOWNLOAD_FAILED', 'the owner has no GitHub token');
 
+    // A rejected token (TOKEN_REJECTED) fails the job like any other GitHub failure. The token
+    // stays stored; the owner's next interactive request finds the rejection and ends the session.
     const sha = await github.getHeadCommit(token, owner, name, branch);
     ctx.commitSha = sha;
     try {
