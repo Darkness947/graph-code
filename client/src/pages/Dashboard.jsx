@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import AnalyzeModal from '../features/repos/AnalyzeModal.jsx';
 import EmptyState from '../features/repos/EmptyState.jsx';
+import RemoveRepoModal from '../features/repos/RemoveRepoModal.jsx';
 import RepoCard from '../features/repos/RepoCard.jsx';
-import { GENERIC_ERROR } from '../features/repos/messages.js';
+import { GENERIC_ERROR, REPO_REMOVED } from '../features/repos/messages.js';
 import { tryAddRepo, useRepositories } from '../features/repos/useRepositories.js';
 import { showToast } from '../store/toastStore.js';
 
-/** Dashboard (spec 8.5). Removing a repository arrives in T2.7. */
+/** Dashboard (spec 8.5). */
 export default function Dashboard() {
-  const { items, error, upsert } = useRepositories();
+  const { items, error, refresh, upsert, remove } = useRepositories();
   const [modal, setModal] = useState(false);
+  const [removing, setRemoving] = useState(null);
   const [filter, setFilter] = useState('');
 
   const retry = async (repo) => {
@@ -50,10 +52,21 @@ export default function Dashboard() {
       {items?.length > 0 && (
         <div className="repo-grid">
           {shown.map((r) => (
-            <RepoCard key={r.id} repo={r} onRetry={retry} />
+            <RepoCard key={r.id} repo={r} onRetry={retry} onRemove={setRemoving} />
           ))}
         </div>
       )}
+
+      <RemoveRepoModal
+        repo={removing}
+        onHide={() => setRemoving(null)}
+        onRemoved={(repo) => {
+          remove(repo.id);
+          setRemoving(null);
+          showToast(REPO_REMOVED);
+        }}
+        onBlocked={refresh}
+      />
 
       <AnalyzeModal
         show={modal}

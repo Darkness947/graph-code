@@ -12,7 +12,7 @@ const BADGES = {
   failed: { text: 'Failed', className: 'repo-badge-failed' },
 };
 
-/** One repository card (spec 8.5). Removing is wired in T2.7 through `onRemove`. */
+/** One repository card (spec 8.5). `onRemove(repo)` opens the remove confirmation. */
 export default function RepoCard({ repo, onRetry, onRemove }) {
   const [retrying, setRetrying] = useState(false);
   const analyzing = isAnalyzing(repo);

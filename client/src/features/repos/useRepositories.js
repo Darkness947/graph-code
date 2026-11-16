@@ -50,11 +50,15 @@ export function useRepositories() {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(false);
   const alive = useRef(true);
+  // Counts local changes (add, retry, remove). A list fetched across a change is stale and dropped,
+  // so a poll that left before it cannot undo it; the next poll brings the fresh list.
+  const mutations = useRef(0);
 
   const refresh = useCallback(async () => {
+    const started = mutations.current;
     try {
       const data = await listRepos();
-      if (!alive.current) return;
+      if (!alive.current || mutations.current !== started) return;
       // Keep the same array when a poll brings nothing new, so the grid does not re-render.
       setItems((cur) => (JSON.stringify(cur) === JSON.stringify(data.items) ? cur : data.items));
       setError(false);
@@ -87,8 +91,15 @@ export function useRepositories() {
 
   /** Shows a just-added repository at the top, replacing any older card for it. */
   const upsert = useCallback((repo) => {
+    mutations.current += 1;
     setItems((cur) => [repo, ...(cur ?? []).filter((r) => r.id !== repo.id)]);
   }, []);
 
-  return { items, error, refresh, upsert };
+  /** Drops a removed repository's card. */
+  const remove = useCallback((id) => {
+    mutations.current += 1;
+    setItems((cur) => (cur ?? []).filter((r) => r.id !== id));
+  }, []);
+
+  return { items, error, refresh, upsert, remove };
 }

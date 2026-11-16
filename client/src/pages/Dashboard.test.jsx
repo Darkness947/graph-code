@@ -171,6 +171,55 @@ describe('Dashboard (spec 8.5)', () => {
     expect(await screen.findByText('Analyzing')).toBeInTheDocument();
   });
 
+  it('a poll that started before Try again does not undo the retry', async () => {
+    const failed = repo({
+      status: 'failed',
+      latestJob: job({ status: 'failed', errorCode: 'INTERNAL', errorMessage: 'Boom.' }),
+    });
+    const other = repo({
+      id: 'r2',
+      owner: 'acme',
+      name: 'tools',
+      displayName: 'acme/tools',
+      status: 'analyzing',
+      latestJob: job({ id: 'j2' }),
+    });
+    const started = repo({ status: 'analyzing', latestJob: job({ id: 'j3' }) });
+    let release;
+    let calls = 0;
+    mockApi({
+      me: USER,
+      routes: {
+        '/repos': (o) => {
+          if (o?.method === 'POST')
+            return Promise.resolve({ repository: started, job: started.latestJob });
+          calls += 1;
+          if (calls === 1) return Promise.resolve({ items: [failed, other] });
+          return new Promise((r) => {
+            release = () => r({ items: [failed, other] });
+          });
+        },
+      },
+    });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/dashboard');
+
+    const card = await screen.findByRole('article', { name: 'vercel/next-learn' });
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(calls).toBe(2);
+    await user.click(within(card).getByRole('button', { name: 'Try again' }));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('article', { name: 'vercel/next-learn' })).getByText('Analyzing'),
+      ).toBeInTheDocument(),
+    );
+    await act(async () => release());
+    const after = screen.getByRole('article', { name: 'vercel/next-learn' });
+    expect(within(after).getByText('Analyzing')).toBeInTheDocument();
+    expect(within(after).queryByText('Boom.')).not.toBeInTheDocument();
+  });
+
   it('filters cards client-side', async () => {
     mockApi({
       me: USER,
@@ -201,6 +250,139 @@ describe('Dashboard (spec 8.5)', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: /See your codebase's architecture/ }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('Remove repository (spec 8.5)', () => {
+  const CONFIRM =
+    'Remove vercel/next-learn? This deletes its dependency graph and cached AI results from Graph Code. Your repository on GitHub is not affected.';
+
+  /** Routes `GET /repos` to `items` and `DELETE /repos/r1` to `onDelete`. */
+  const routes = (items, onDelete) => ({
+    ...reposRoute(items),
+    '/repos/r1': (o) => (o?.method === 'DELETE' ? onDelete(o) : apiErr(404, {})),
+  });
+
+  async function openModal(user) {
+    const card = await screen.findByRole('article', { name: 'vercel/next-learn' });
+    await user.click(within(card).getByRole('button', { name: 'Remove repository' }));
+    return screen.findByRole('dialog');
+  }
+
+  it('confirms with the exact text; Cancel closes without deleting', async () => {
+    const onDelete = vi.fn();
+    mockApi({ me: USER, routes: routes([repo()], onDelete) });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    const dialog = await openModal(user);
+    expect(dialog).toHaveAccessibleName(CONFIRM);
+    expect(within(dialog).getByText(CONFIRM)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Remove' })).toHaveClass(
+      'btn-danger-outline',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole('article', { name: 'vercel/next-learn' })).toBeInTheDocument();
+  });
+
+  it('removes: sends DELETE, the card disappears and the toast says "Repository removed"', async () => {
+    const onDelete = vi.fn(() => Promise.resolve(null));
+    const other = repo({ id: 'r2', owner: 'acme', name: 'tools', displayName: 'acme/tools' });
+    mockApi({ me: USER, routes: routes([repo(), other], onDelete) });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    const dialog = await openModal(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+    expect(onDelete).toHaveBeenCalledExactlyOnceWith({ method: 'DELETE' });
+    expect(await screen.findByText('Repository removed')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByRole('article', { name: 'vercel/next-learn' })).not.toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'acme/tools' })).toBeInTheDocument();
+  });
+
+  it('shows the JOB_ACTIVE message inline and keeps the card', async () => {
+    mockApi({
+      me: USER,
+      routes: routes([repo()], () =>
+        apiErr(409, { code: 'JOB_ACTIVE', message: 'x', jobId: 'j9' }),
+      ),
+    });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    const dialog = await openModal(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'This repository is already being analyzed.',
+    );
+    expect(screen.getByRole('article', { name: 'vercel/next-learn' })).toBeInTheDocument();
+    expect(screen.queryByText('Repository removed')).not.toBeInTheDocument();
+  });
+
+  it('shows the generic message inline on any other failure', async () => {
+    mockApi({ me: USER, routes: routes([repo()], () => apiErr(500, { code: 'INTERNAL' })) });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    const dialog = await openModal(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Something went wrong. Try again.',
+    );
+  });
+
+  it('disables Remove while analyzing, with the tooltip "Wait for analysis to finish"', async () => {
+    mockApi({ me: USER, routes: reposRoute([repo({ status: 'analyzing', latestJob: job() })]) });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    const card = await screen.findByRole('article', { name: 'vercel/next-learn' });
+    const button = within(card).getByRole('button', { name: 'Remove repository' });
+    expect(button).toBeDisabled();
+    await user.hover(button.parentElement);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Wait for analysis to finish');
+  });
+
+  it('a poll that started before the delete does not bring the card back', async () => {
+    const analyzing = repo({
+      id: 'r2',
+      owner: 'acme',
+      name: 'tools',
+      displayName: 'acme/tools',
+      status: 'analyzing',
+      latestJob: job(),
+    });
+    let release;
+    let calls = 0;
+    mockApi({
+      me: USER,
+      routes: {
+        '/repos': () => {
+          calls += 1;
+          if (calls === 1) return Promise.resolve({ items: [repo(), analyzing] });
+          // The second poll is in flight while the user removes the card.
+          return new Promise((r) => {
+            release = () => r({ items: [repo(), analyzing] });
+          });
+        },
+        '/repos/r1': () => Promise.resolve(null),
+      },
+    });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/dashboard');
+
+    const dialog = await openModal(user);
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(calls).toBe(2);
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+    expect(await screen.findByText('Repository removed')).toBeInTheDocument();
+    await act(async () => release());
+    expect(screen.queryByRole('article', { name: 'vercel/next-learn' })).not.toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'acme/tools' })).toBeInTheDocument();
   });
 });
 

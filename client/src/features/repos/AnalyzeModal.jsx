@@ -26,7 +26,7 @@ function useSubmit(onAdded) {
 function InlineError({ error }) {
   if (!error) return null;
   return (
-    <p className="analyze-error" role="alert">
+    <p className="modal-inline-error" role="alert">
       {error.message}
       {error.code === 'REPO_ALREADY_ANALYZED' && error.repositoryId && (
         <>

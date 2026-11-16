@@ -49,5 +49,10 @@ export function createReposRouter({ pool, crypto, github, enqueue, addRepoLimit,
     res.json(await repos.get(req.user.id, req.params.id));
   });
 
+  router.delete('/:id', uuidParam('id'), validateRequest, async (req, res) => {
+    await repos.remove(req.user.id, req.params.id);
+    res.status(204).end();
+  });
+
   return router;
 }
