@@ -86,6 +86,7 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
       ['get', '/api/repos'],
       ['post', '/api/repos'],
       ['get', '/api/repos/00000000-0000-4000-8000-000000000000'],
+      ['delete', '/api/repos/00000000-0000-4000-8000-000000000000'],
     ]) {
       const res = await request(app)[method](path);
       expect(res.status).toBe(401);
@@ -291,6 +292,145 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
       const b = await post(cookieB, 'a/b');
       expect(b.status).toBe(202);
       expect(b.body.repository.id).not.toBe(a.body.repository.id);
+    });
+  });
+
+  describe('DELETE /api/repos/:id', { timeout: 60000 }, () => {
+    const CHILD_TABLES = [
+      ['ingestion_jobs', 'repository_id = $1'],
+      ['nodes', 'repository_id = $1'],
+      ['edges', 'repository_id = $1'],
+      ['unresolved_imports', 'source_node_id IN (SELECT id FROM nodes WHERE repository_id = $1)'],
+      ['ai_results', 'repository_id = $1'],
+      ['ai_audit_log', 'repository_id = $1'],
+    ];
+
+    /** Row counts for the repository and every child table. */
+    async function countRows(repoId) {
+      const counts = {};
+      const repo = await pool.query('SELECT count(*)::int AS n FROM repositories WHERE id = $1', [
+        repoId,
+      ]);
+      counts.repositories = repo.rows[0].n;
+      for (const [table, where] of CHILD_TABLES) {
+        const { rows } = await pool.query(
+          `SELECT count(*)::int AS n FROM ${table} WHERE ${where}`,
+          [repoId],
+        );
+        counts[table] = rows[0].n;
+      }
+      return counts;
+    }
+
+    /** Adds a repository, finishes its job, and seeds one row in every child table. */
+    async function seedReady(cookie, repo) {
+      const [owner, name] = repo.split('/');
+      github.getRepository.mockResolvedValueOnce(meta({ owner, name }));
+      const added = await post(cookie, repo);
+      const repoId = added.body.repository.id;
+      await pool.query(
+        `UPDATE ingestion_jobs SET status = 'succeeded', finished_at = now() WHERE repository_id = $1`,
+        [repoId],
+      );
+      await pool.query(`UPDATE repositories SET status = 'ready' WHERE id = $1`, [repoId]);
+      const { rows: nodes } = await pool.query(
+        `INSERT INTO nodes (repository_id, path, path_ltree, name, node_type)
+         VALUES ($1, 'a.js', 'a_js', 'a.js', 'file'), ($1, 'b.js', 'b_js', 'b.js', 'file')
+         RETURNING id`,
+        [repoId],
+      );
+      await pool.query(
+        'INSERT INTO edges (repository_id, source_node_id, target_node_id) VALUES ($1, $2, $3)',
+        [repoId, nodes[0].id, nodes[1].id],
+      );
+      await pool.query(
+        `INSERT INTO unresolved_imports (source_node_id, raw_specifier, reason)
+         VALUES ($1, './missing', 'file_not_found')`,
+        [nodes[0].id],
+      );
+      const { rows: ai } = await pool.query(
+        `INSERT INTO ai_results (repository_id, target_path, mode, input_hash, model, prompt_version, response)
+         VALUES ($1, 'a.js', 'blast_radius', 'h', 'm', 'v1', '{}') RETURNING id`,
+        [repoId],
+      );
+      await pool.query(
+        `INSERT INTO ai_audit_log (repository_id, ai_result_id, mode, input_hash, cache_hit, outcome)
+         VALUES ($1, $2, 'blast_radius', 'h', false, 'success')`,
+        [repoId, ai[0].id],
+      );
+      return repoId;
+    }
+
+    const del = (cookie, id) => request(app).delete(`/api/repos/${id}`).set('Cookie', cookie);
+    const ONE_EACH = {
+      repositories: 1,
+      ingestion_jobs: 1,
+      nodes: 2,
+      edges: 1,
+      unresolved_imports: 1,
+      ai_results: 1,
+      ai_audit_log: 1,
+    };
+    const NONE = Object.fromEntries(Object.keys(ONE_EACH).map((k) => [k, 0]));
+
+    it('removes the repository and every child row (204), leaving other repositories intact', async () => {
+      const repoId = await seedReady(cookieA, 'a/b');
+      const otherId = await seedReady(cookieA, 'c/d');
+      expect(await countRows(repoId)).toEqual(ONE_EACH);
+
+      const res = await del(cookieA, repoId);
+      expect(res.status).toBe(204);
+      expect(res.body).toEqual({});
+      expect(await countRows(repoId)).toEqual(NONE);
+      expect(await countRows(otherId)).toEqual(ONE_EACH);
+    });
+
+    it.each(['queued', 'running'])(
+      'blocks deletion while a job is %s (409 JOB_ACTIVE with jobId), keeping every row',
+      async (status) => {
+        const added = await post(cookieA, 'a/b');
+        const { id: repoId } = added.body.repository;
+        await pool.query('UPDATE ingestion_jobs SET status = $2 WHERE repository_id = $1', [
+          repoId,
+          status,
+        ]);
+
+        const res = await del(cookieA, repoId);
+        expect(res.status).toBe(409);
+        expect(res.body.error).toMatchObject({
+          code: 'JOB_ACTIVE',
+          message: 'This repository is already being analyzed.',
+          jobId: added.body.job.id,
+        });
+        expect(await countRows(repoId)).toMatchObject({ repositories: 1, ingestion_jobs: 1 });
+
+        await pool.query(
+          `UPDATE ingestion_jobs SET status = 'failed', finished_at = now() WHERE repository_id = $1`,
+          [repoId],
+        );
+        await pool.query(`UPDATE repositories SET status = 'failed' WHERE id = $1`, [repoId]);
+        expect((await del(cookieA, repoId)).status).toBe(204);
+        expect(await countRows(repoId)).toMatchObject({ repositories: 0, ingestion_jobs: 0 });
+      },
+    );
+
+    it('ownership: user B gets 404 NOT_FOUND and user A keeps every row', async () => {
+      const repoId = await seedReady(cookieA, 'a/b');
+      const res = await del(cookieB, repoId);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+      expect(await countRows(repoId)).toEqual(ONE_EACH);
+    });
+
+    it('404 for an unknown id, 400 for a non-UUID id, 401 without a session', async () => {
+      const unknown = await del(cookieA, '00000000-0000-4000-8000-000000000000');
+      expect(unknown.status).toBe(404);
+      expect(unknown.body.error.code).toBe('NOT_FOUND');
+      const bad = await del(cookieA, 'not-a-uuid');
+      expect(bad.status).toBe(400);
+      expect(bad.body.error.code).toBe('VALIDATION_ERROR');
+      const anon = await request(app).delete('/api/repos/00000000-0000-4000-8000-000000000000');
+      expect(anon.status).toBe(401);
     });
   });
 

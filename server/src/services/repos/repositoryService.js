@@ -149,5 +149,39 @@ export function createRepositoryService(pool) {
     return { repository, job: repository.latestJob };
   }
 
-  return { list, get, addedKeys, addOrRetry };
+  /**
+   * Deletes the repository and, through the schema's cascades, its jobs, nodes, edges,
+   * unresolved imports and AI results (spec 6.2). The row lock serializes this with `addOrRetry`.
+   * @param {string} userId
+   * @param {string} repoId
+   * @returns {Promise<void>} throws NOT_FOUND (also for another user's) or JOB_ACTIVE
+   */
+  async function remove(userId, repoId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rowCount } = await client.query(
+        'SELECT id FROM repositories WHERE id = $1 AND user_id = $2 FOR UPDATE',
+        [repoId, userId],
+      );
+      if (rowCount === 0) throw new AppError('NOT_FOUND', 'Repository not found.');
+      const active = await client.query(
+        `SELECT id FROM ingestion_jobs WHERE repository_id = $1 AND status IN ('queued', 'running')`,
+        [repoId],
+      );
+      if (active.rowCount > 0) throw jobActive(active.rows[0].id);
+      await client.query('DELETE FROM repositories WHERE id = $1 AND user_id = $2', [
+        repoId,
+        userId,
+      ]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  return { list, get, addedKeys, addOrRetry, remove };
 }
