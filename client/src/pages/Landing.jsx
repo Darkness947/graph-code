@@ -26,7 +26,7 @@ const STEPS = [
  * the sign-in button (user decision, replaces the spec 8.2 redirect).
  */
 export default function Landing() {
-  const { isSignedIn } = useSession();
+  const { isLoading, isSignedIn } = useSession();
 
   return (
     <div className="landing">
@@ -38,7 +38,12 @@ export default function Landing() {
           Graph Code turns a GitHub repository into an interactive dependency graph and uses AI to
           show which files a change will affect.
         </p>
-        {isSignedIn ? (
+        {isLoading ? (
+          // Holds the button's space until the session is known, so neither button flickers.
+          <span className="btn btn-lg invisible" aria-hidden="true">
+            Sign in with GitHub
+          </span>
+        ) : isSignedIn ? (
           <Link className="btn btn-primary btn-lg" to="/dashboard">
             <i className="bi bi-grid me-2" aria-hidden="true" />
             Go to dashboard

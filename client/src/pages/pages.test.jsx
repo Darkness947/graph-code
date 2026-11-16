@@ -10,9 +10,10 @@ vi.mock('../api/client.js', async (importOriginal) => ({
 const main = () => within(screen.getByRole('main'));
 
 describe('Landing (spec 8.4)', () => {
-  it('shows the hero with the exact wording, the sign-in link and the placeholder visual', () => {
+  it('shows the hero with the exact wording, the sign-in link and the placeholder visual', async () => {
     mockApi({ me: null });
     renderApp('/');
+    await main().findByRole('link', { name: 'Sign in with GitHub' });
 
     expect(
       main().getByRole('heading', {
@@ -73,6 +74,14 @@ describe('Landing (spec 8.4)', () => {
     ).toBeInTheDocument();
     expect(main().queryByRole('link', { name: 'Sign in with GitHub' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your Repositories' })).not.toBeInTheDocument();
+  });
+
+  it('shows neither button while the session is still loading', () => {
+    mockApi({ me: USER });
+    renderApp('/');
+
+    expect(main().queryByRole('link', { name: 'Sign in with GitHub' })).not.toBeInTheDocument();
+    expect(main().queryByRole('link', { name: 'Go to dashboard' })).not.toBeInTheDocument();
   });
 });
 

@@ -452,6 +452,16 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
       },
     );
 
+    it("ends the same user's sessions on other devices too", async () => {
+      const deviceA = await signIn(205);
+      const deviceB = await signIn(205);
+      github.listUserRepositories.mockRejectedValue(rejected());
+      vi.spyOn(console, 'error').mockImplementationOnce(() => {});
+      expect((await request(app).get('/api/github/repos').set('Cookie', deviceA)).status).toBe(401);
+      expect((await request(app).get('/api/me').set('Cookie', deviceB)).status).toBe(401);
+      expect((await request(app).get('/api/me').set('Cookie', cookieA)).status).toBe(200);
+    });
+
     it('signing in again stores a fresh token', async () => {
       const cookie = await signIn(204);
       github.listUserRepositories.mockRejectedValue(rejected());

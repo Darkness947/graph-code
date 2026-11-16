@@ -14,9 +14,10 @@ export function notFoundHandler(req, res, next) {
  * The response never contains a stack trace, SQL or an internal path. Details are logged on the
  * server with the request ID.
  *
- * GitHub failures are logged with their reason and status only (never tokens, URLs or headers).
- * When GitHub rejects the signed-in user's token, the stored token is deleted and the session
- * destroyed, so the client's 401 handling sends the user to sign in again.
+ * GitHub failures are logged with the request method and path plus GitHub's reason and status
+ * (never tokens, GitHub URLs or headers). When GitHub rejects the signed-in user's token, the
+ * stored token and every session of that user are deleted, so the client's 401 handling sends the
+ * user to sign in again on every device.
  * @param {{ NODE_ENV: string }} config
  * @param {{ pool?: import('pg').Pool }} [deps]
  * @returns {import('express').ErrorRequestHandler}
@@ -72,13 +73,15 @@ export function createErrorHandler(config, { pool } = {}) {
 }
 
 /**
- * Deletes the signed-in user's stored GitHub token and destroys the session. Failures are logged
- * and swallowed: the caller still answers 401.
+ * Deletes the signed-in user's stored GitHub token and all of their sessions (other devices would
+ * otherwise stay "signed in" with no usable token), then destroys this request's session.
+ * Failures are logged and swallowed: the caller still answers 401.
  */
 async function forgetRejectedToken(req, res, config, pool) {
   try {
     if (pool && req.user?.id) {
       await pool.query('UPDATE users SET access_token_enc = NULL WHERE id = $1', [req.user.id]);
+      await pool.query("DELETE FROM session WHERE sess->>'userId' = $1", [req.user.id]);
     }
     await destroySession(req, res, config);
   } catch (e) {
