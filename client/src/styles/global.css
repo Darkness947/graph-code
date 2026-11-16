@@ -73,6 +73,20 @@ h2 {
   --bs-btn-disabled-border-color: var(--accent-blue);
 }
 
+.btn-danger-outline {
+  --bs-btn-color: var(--danger);
+  --bs-btn-bg: transparent;
+  --bs-btn-border-color: var(--danger);
+  --bs-btn-hover-color: var(--danger);
+  --bs-btn-hover-bg: var(--bg-surface-hover);
+  --bs-btn-hover-border-color: var(--danger);
+  --bs-btn-active-color: var(--danger);
+  --bs-btn-active-bg: var(--bg-surface-hover);
+  --bs-btn-active-border-color: var(--danger);
+  --bs-btn-disabled-color: var(--danger);
+  --bs-btn-disabled-border-color: var(--danger);
+}
+
 .btn-lg {
   --bs-btn-font-size: 16px;
   --bs-btn-padding-x: 1.25rem;

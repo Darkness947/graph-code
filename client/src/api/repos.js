@@ -12,3 +12,10 @@ export const addRepo = (repo) => request('/repos', { method: 'POST', body: { rep
 
 /** @param {number} page */
 export const listGithubRepos = (page = 1) => request(`/github/repos?page=${page}`);
+
+/**
+ * Deletes a repository and all its data. `409 JOB_ACTIVE` while a job runs.
+ * @param {string} id
+ * @returns {Promise<null>}
+ */
+export const deleteRepo = (id) => request(`/repos/${encodeURIComponent(id)}`, { method: 'DELETE' });

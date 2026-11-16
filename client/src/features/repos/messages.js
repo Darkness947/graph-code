@@ -67,3 +67,8 @@ export function formatDate(iso, { time = false } = {}) {
 }
 
 export const SESSION_EXPIRED = 'Your session has expired. Please sign in again.';
+
+/** Remove confirmation (spec 8.5). */
+export const REMOVE_CONFIRM = (displayName) =>
+  `Remove ${displayName}? This deletes its dependency graph and cached AI results from Graph Code. Your repository on GitHub is not affected.`;
+export const REPO_REMOVED = 'Repository removed';
