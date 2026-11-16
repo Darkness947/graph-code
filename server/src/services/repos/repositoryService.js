@@ -43,17 +43,17 @@ function jobActive(jobId) {
 }
 
 /** Statuses of a job that blocks a new job or a delete (matches `one_active_job_per_repo`). */
-const ACTIVE_JOB = `status IN ('queued', 'running')`;
+const ACTIVE_STATUSES = ['queued', 'running'];
 
 /**
  * @param {Pick<import('pg').Pool, 'query'>} db a pool or a client inside a transaction
- * @param {string} repoId
+ * @param {string} repoId an id the caller has already scoped to the signed-in user
  * @returns {Promise<string | null>} the repository's queued or running job, if any
  */
 async function findActiveJobId(db, repoId) {
   const { rows } = await db.query(
-    `SELECT id FROM ingestion_jobs WHERE repository_id = $1 AND ${ACTIVE_JOB}`,
-    [repoId],
+    'SELECT id FROM ingestion_jobs WHERE repository_id = $1 AND status = ANY($2)',
+    [repoId, ACTIVE_STATUSES],
   );
   return rows[0]?.id ?? null;
 }
@@ -189,10 +189,10 @@ export function createRepositoryService(pool) {
       const { rows } = await client.query(
         `SELECT r.id, j.id AS active_job_id
          FROM repositories r
-         LEFT JOIN ingestion_jobs j ON j.repository_id = r.id AND j.${ACTIVE_JOB}
+         LEFT JOIN ingestion_jobs j ON j.repository_id = r.id AND j.status = ANY($3)
          WHERE r.id = $1 AND r.user_id = $2
          FOR UPDATE OF r`,
-        [repoId, userId],
+        [repoId, userId, ACTIVE_STATUSES],
       );
       if (rows.length === 0) throw new AppError('NOT_FOUND', 'Repository not found.');
       if (rows[0].active_job_id) throw jobActive(rows[0].active_job_id);
