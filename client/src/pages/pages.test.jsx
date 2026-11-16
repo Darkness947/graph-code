@@ -60,11 +60,19 @@ describe('Landing (spec 8.4)', () => {
     ).toBeInTheDocument();
   });
 
-  it('redirects a signed-in user to the dashboard', async () => {
+  it('stays on the landing page for a signed-in user, with "Go to dashboard" instead of sign-in', async () => {
     mockApi({ me: USER });
     renderApp('/');
 
-    expect(await screen.findByRole('heading', { name: 'Your Repositories' })).toBeInTheDocument();
+    expect(await main().findByRole('link', { name: 'Go to dashboard' })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    );
+    expect(
+      main().getByRole('heading', { level: 1, name: /See your codebase's architecture/ }),
+    ).toBeInTheDocument();
+    expect(main().queryByRole('link', { name: 'Sign in with GitHub' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your Repositories' })).not.toBeInTheDocument();
   });
 });
 

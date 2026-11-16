@@ -23,22 +23,39 @@ describe('NavBar (spec 8.3)', () => {
     expect(topBar().queryByRole('button', { name: /octocat/ })).not.toBeInTheDocument();
   });
 
-  it('signed in: wordmark to /dashboard, avatar and login, Dashboard and Log out', async () => {
+  it('signed in: wordmark to /, Dashboard and About links, avatar and login, Dashboard and Log out', async () => {
     mockApi({ me: USER });
     const user = userEvent.setup();
     const { container } = renderApp('/about');
 
     const toggle = await topBar().findByRole('button', { name: /octocat/ });
-    expect(topBar().getByRole('link', { name: 'Graph Code' })).toHaveAttribute(
-      'href',
-      '/dashboard',
-    );
+    expect(topBar().getByRole('link', { name: 'Graph Code' })).toHaveAttribute('href', '/');
+    expect(topBar().getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
+    expect(topBar().getByRole('link', { name: 'About' })).toHaveAttribute('href', '/about');
     expect(container.querySelector('img.user-avatar')).toHaveAttribute('src', USER.avatarUrl);
     expect(topBar().queryByRole('link', { name: 'Sign in with GitHub' })).not.toBeInTheDocument();
 
     await user.click(toggle);
-    expect(topBar().getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
-    expect(topBar().getByRole('button', { name: 'Log out' })).toBeInTheDocument();
+    const menu = within(container.querySelector('.dropdown-menu'));
+    expect(menu.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
+    expect(menu.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
+  });
+
+  it('signed in: the wordmark leads home without bouncing back to the dashboard', async () => {
+    mockApi({ me: USER });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    await screen.findByRole('heading', { name: 'Your Repositories' });
+    await user.click(topBar().getByRole('link', { name: 'Graph Code' }));
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /See your codebase's architecture/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to dashboard' })).toBeInTheDocument();
+
+    await user.click(topBar().getByRole('link', { name: 'About' }));
+    await user.click(topBar().getByRole('link', { name: 'Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Your Repositories' })).toBeInTheDocument();
   });
 
   it('Log out posts to the server and returns to the signed-out landing page', async () => {

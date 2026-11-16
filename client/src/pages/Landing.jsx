@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import SignInButton from '../components/SignInButton.jsx';
 import { useSession } from '../features/auth/useSession.js';
 import WorkspacePreview from './WorkspacePreview.jsx';
@@ -21,10 +21,12 @@ const STEPS = [
   },
 ];
 
-/** Landing page (spec 8.4). Signed-in users go straight to the dashboard (spec 8.2). */
+/**
+ * Landing page (spec 8.4). Open to everyone; a signed-in user sees "Go to dashboard" in place of
+ * the sign-in button (user decision, replaces the spec 8.2 redirect).
+ */
 export default function Landing() {
   const { isSignedIn } = useSession();
-  if (isSignedIn) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="landing">
@@ -36,7 +38,14 @@ export default function Landing() {
           Graph Code turns a GitHub repository into an interactive dependency graph and uses AI to
           show which files a change will affect.
         </p>
-        <SignInButton large />
+        {isSignedIn ? (
+          <Link className="btn btn-primary btn-lg" to="/dashboard">
+            <i className="bi bi-grid me-2" aria-hidden="true" />
+            Go to dashboard
+          </Link>
+        ) : (
+          <SignInButton large />
+        )}
         <WorkspacePreview />
       </section>
 

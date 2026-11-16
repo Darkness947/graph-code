@@ -15,20 +15,31 @@ function Mark() {
   );
 }
 
-/** Shared top bar (spec 8.3). */
+/**
+ * Shared top bar (spec 8.3). The wordmark always leads home, and signed-in users also get
+ * Dashboard and About links (user decision, extends spec 8.3).
+ */
 export default function NavBar() {
   const { user, isLoading, isSignedIn } = useSession();
 
   return (
     <header className="topbar">
-      <Link className="topbar-wordmark" to={isSignedIn ? '/dashboard' : '/'}>
+      <Link className="topbar-wordmark" to="/">
         <Mark />
         Graph Code
       </Link>
       {!isLoading && (
         <nav className="topbar-actions" aria-label="Main">
           {isSignedIn ? (
-            <UserMenu user={user} />
+            <>
+              <NavLink className="topbar-link" to="/dashboard">
+                Dashboard
+              </NavLink>
+              <NavLink className="topbar-link" to="/about">
+                About
+              </NavLink>
+              <UserMenu user={user} />
+            </>
           ) : (
             <>
               <NavLink className="topbar-link" to="/about">
