@@ -7,7 +7,8 @@ export const ALLOWED_HOSTS = Object.freeze(['github.com', 'api.github.com', 'cod
 const API_TIMEOUT_MS = 15000;
 const ZIP_TIMEOUT_MS = 60000;
 const MAX_REDIRECTS = 3;
-const MAX_SOURCE_BYTES = 1024 * 1024;
+/** Largest file source fetched from GitHub (spec 6.2). */
+export const MAX_SOURCE_BYTES = 1024 * 1024;
 
 const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const NAME_RE = /^[A-Za-z0-9._-]{1,100}$/;

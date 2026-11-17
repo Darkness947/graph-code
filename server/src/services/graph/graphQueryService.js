@@ -1,7 +1,5 @@
 import { AppError } from '../../errors/AppError.js';
-
-/** Files above this size are not displayed (spec 6.2, 8.6). */
-export const MAX_SOURCE_BYTES = 1024 * 1024;
+import { MAX_SOURCE_BYTES } from '../github/githubClient.js';
 
 function notReady() {
   return new AppError('GRAPH_NOT_READY', "This repository's graph isn't ready yet.");
@@ -75,16 +73,21 @@ export function createGraphQueryService({ repos, graphs, github, getToken }) {
    * @returns {Promise<{ path: string, language: string | null, content: string } | { tooLarge: true }>}
    */
   async function getSource(userId, repoId, nodeId) {
-    await readyRepository(userId, repoId);
+    const repository = await readyRepository(userId, repoId);
     const node = await graphs.findNode(userId, repoId, nodeId);
     if (!node || node.nodeType !== 'file') throw nodeNotFound();
-    if (!node.commitSha) throw notReady();
     if (node.sizeBytes > MAX_SOURCE_BYTES) return { tooLarge: true };
 
     const token = await getToken(userId);
     let content;
     try {
-      content = await github.getFileSource(token, node.owner, node.name, node.path, node.commitSha);
+      content = await github.getFileSource(
+        token,
+        repository.owner,
+        repository.name,
+        node.path,
+        node.commitSha,
+      );
     } catch (err) {
       // GitHub's copy can exceed the limit even when the stored size did not (spec 6.2).
       if (err instanceof AppError && err.githubReason === 'TOO_LARGE') return { tooLarge: true };

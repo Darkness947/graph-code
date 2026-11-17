@@ -6,7 +6,9 @@ import { AppError } from '../../src/errors/AppError.js';
 import { tokenCryptoFromConfig } from '../../src/services/auth/tokenCrypto.js';
 import { encodePathLtree } from '../../src/services/ingestion/ltree.js';
 import { UNRESOLVED_LIMIT } from '../../src/services/graph/graphRepository.js';
+import { MAX_SOURCE_BYTES } from '../../src/services/github/githubClient.js';
 import { hasTestDb, resetTestDatabase } from '../helpers/db.js';
+import { signIn } from '../helpers/auth.js';
 
 const config = {
   NODE_ENV: 'test',
@@ -26,6 +28,13 @@ const oauth = {
   exchangeCode: vi.fn(),
   fetchUser: vi.fn(),
 };
+/** A client error with the given `githubReason`, as githubClient.js throws it. */
+function githubError(reason) {
+  const err = new AppError('GITHUB_UNAVAILABLE', "GitHub isn't responding right now.");
+  err.githubReason = reason;
+  return err;
+}
+
 const github = {
   getRepository: vi.fn(),
   listUserRepositories: vi.fn(),
@@ -40,20 +49,6 @@ describe.skipIf(!hasTestDb)('graph and source endpoints (integration)', () => {
   let userA;
   let userB;
   const crypto = tokenCryptoFromConfig(config);
-
-  const cookieOf = (res) =>
-    (res.headers['set-cookie'] ?? []).find((c) => c.startsWith('gc.sid='))?.split(';')[0];
-
-  async function signIn(ghId) {
-    oauth.exchangeCode.mockResolvedValue({ token: `gho_${ghId}`, scopes: '' });
-    oauth.fetchUser.mockResolvedValue({ id: ghId, login: `user${ghId}`, avatarUrl: null });
-    const start = await request(app).get('/api/auth/github');
-    const state = new URL(start.headers.location).searchParams.get('state');
-    const cb = await request(app)
-      .get(`/api/auth/github/callback?code=abc&state=${state}`)
-      .set('Cookie', cookieOf(start));
-    return cookieOf(cb);
-  }
 
   const userIdOf = async (ghId) =>
     (await pool.query('SELECT id FROM users WHERE github_id = $1', [ghId])).rows[0].id;
@@ -105,7 +100,7 @@ describe.skipIf(!hasTestDb)('graph and source endpoints (integration)', () => {
       }),
       big: await insertNode(repoId, 'src/lib/big.ts', 'file', {
         language: 'ts',
-        sizeBytes: 1024 * 1024 + 1,
+        sizeBytes: MAX_SOURCE_BYTES + 1,
         metrics: { fanIn: 0, fanOut: 0 },
       }),
       app: await insertNode(repoId, 'src/app.tsx', 'file', {
@@ -140,8 +135,8 @@ describe.skipIf(!hasTestDb)('graph and source endpoints (integration)', () => {
   beforeAll(async () => {
     pool = await resetTestDatabase();
     app = createApp(config, { pool, oauth, crypto, github });
-    cookieA = await signIn(301);
-    cookieB = await signIn(302);
+    cookieA = await signIn(app, oauth, 301);
+    cookieB = await signIn(app, oauth, 302);
     userA = await userIdOf(301);
     userB = await userIdOf(302);
   });
@@ -301,9 +296,7 @@ describe.skipIf(!hasTestDb)('graph and source endpoints (integration)', () => {
     it('returns 200 {tooLarge: true} when GitHub reports the file too large', async () => {
       const repoId = await insertRepo(userA, 'tailor');
       const ids = await seedGraph(repoId);
-      const err = new AppError('GITHUB_UNAVAILABLE', "GitHub isn't responding right now.");
-      err.githubReason = 'TOO_LARGE';
-      github.getFileSource.mockRejectedValue(err);
+      github.getFileSource.mockRejectedValue(githubError('TOO_LARGE'));
       const res = await getSource(cookieA, repoId, ids.utils);
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ tooLarge: true });
@@ -312,9 +305,7 @@ describe.skipIf(!hasTestDb)('graph and source endpoints (integration)', () => {
     it('returns 502 GITHUB_UNAVAILABLE when GitHub fails', async () => {
       const repoId = await insertRepo(userA, 'tailor');
       const ids = await seedGraph(repoId);
-      const err = new AppError('GITHUB_UNAVAILABLE', "GitHub isn't responding right now.");
-      err.githubReason = 'SERVER';
-      github.getFileSource.mockRejectedValue(err);
+      github.getFileSource.mockRejectedValue(githubError('SERVER'));
       const res = await getSource(cookieA, repoId, ids.utils);
       expect(res.status).toBe(502);
       expect(res.body.error.code).toBe('GITHUB_UNAVAILABLE');

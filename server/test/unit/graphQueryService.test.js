@@ -4,27 +4,31 @@ import {
   createGraphQueryService,
   mapNode,
   parentPathOf,
-  MAX_SOURCE_BYTES,
 } from '../../src/services/graph/graphQueryService.js';
+import { MAX_SOURCE_BYTES } from '../../src/services/github/githubClient.js';
 
 const SHA = 'a'.repeat(40);
 const USER = 'user-1';
 const REPO = 'repo-1';
 const NODE = 'node-1';
+const READY_REPO = {
+  id: REPO,
+  owner: 'darkness947',
+  name: 'vigilante-resume-tailor',
+  status: 'ready',
+};
 
 const fileNode = (over = {}) => ({
   path: 'src/lib/utils.ts',
   nodeType: 'file',
   language: 'ts',
   sizeBytes: 2048,
-  owner: 'darkness947',
-  name: 'vigilante-resume-tailor',
   commitSha: SHA,
   ...over,
 });
 
 function setup() {
-  const repos = { get: vi.fn().mockResolvedValue({ id: REPO, status: 'ready' }) };
+  const repos = { get: vi.fn().mockResolvedValue(READY_REPO) };
   const graphs = {
     readGraph: vi
       .fn()
@@ -116,7 +120,7 @@ describe('GraphQueryService.getGraph', () => {
     });
     const graph = await ctx.service.getGraph(USER, REPO);
     expect(Object.keys(graph)).toEqual(['repository', 'nodes', 'edges', 'unresolved']);
-    expect(graph.repository).toEqual({ id: REPO, status: 'ready' });
+    expect(graph.repository).toEqual(READY_REPO);
     expect(graph.nodes[0].type).toBe('folder');
     expect(graph.edges).toEqual([{ id: 1, source: 'a', target: 'b' }]);
     expect(ctx.graphs.readGraph).toHaveBeenCalledWith(USER, REPO);
@@ -125,7 +129,7 @@ describe('GraphQueryService.getGraph', () => {
   it.each(['pending', 'analyzing', 'failed'])(
     'throws GRAPH_NOT_READY while the repository is %s',
     async (status) => {
-      ctx.repos.get.mockResolvedValue({ id: REPO, status });
+      ctx.repos.get.mockResolvedValue({ ...READY_REPO, status });
       await expect(ctx.service.getGraph(USER, REPO)).rejects.toMatchObject({
         code: 'GRAPH_NOT_READY',
         status: 409,
@@ -204,7 +208,7 @@ describe('GraphQueryService.getSource', () => {
   });
 
   it('throws GRAPH_NOT_READY before ingestion succeeded, without looking up the node', async () => {
-    ctx.repos.get.mockResolvedValue({ id: REPO, status: 'analyzing' });
+    ctx.repos.get.mockResolvedValue({ ...READY_REPO, status: 'analyzing' });
     await expect(ctx.service.getSource(USER, REPO, NODE)).rejects.toMatchObject({
       code: 'GRAPH_NOT_READY',
     });
