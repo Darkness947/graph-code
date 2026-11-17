@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { SAMPLE } from '../../../test/graphFixture.js';
+import { makeGraph, SAMPLE } from '../../../test/graphFixture.js';
 import { buildGraphIndex } from './graphIndex.js';
-import { buildVisibleAncestorMap, computeVisibleNodes, folderChain } from './visibility.js';
+import {
+  buildVisibleAncestorMap,
+  computeVisibleNodes,
+  folderChain,
+  wrapperFolders,
+} from './visibility.js';
 
 const index = buildGraphIndex(SAMPLE);
 const ids = (list) => list.map((v) => v.id);
@@ -86,5 +91,39 @@ describe('folderChain', () => {
   it('lists a path and the folders above it, outermost first', () => {
     expect(folderChain('src/lib/deep')).toEqual(['src', 'src/lib', 'src/lib/deep']);
     expect(folderChain('src')).toEqual(['src']);
+  });
+});
+
+describe('wrapperFolders (decision D-05)', () => {
+  const index = (files) => buildGraphIndex(makeGraph(files));
+
+  it('finds a top-level folder holding at least 60% of the files', () => {
+    expect([
+      ...wrapperFolders(index(['src/a.ts', 'src/b.ts', 'src/c.ts', 'x.ts', 'y.ts'])),
+    ]).toEqual(['src']);
+  });
+
+  it('repeats the check inside it', () => {
+    const files = [
+      'packages/core/a.ts',
+      'packages/core/b.ts',
+      'packages/core/c.ts',
+      'packages/ui/d.ts',
+      'x.ts',
+    ];
+    expect([...wrapperFolders(index(files))]).toEqual(['packages', 'packages/core']);
+  });
+
+  it('finds none when no folder dominates', () => {
+    expect(wrapperFolders(buildGraphIndex(SAMPLE)).size).toBe(0);
+    expect(wrapperFolders(index(['src/a.ts', 'x.ts'])).size).toBe(0);
+    expect(wrapperFolders(index([])).size).toBe(0);
+  });
+
+  it("shows an expanded wrapper's children at its level and hides the wrapper itself", () => {
+    const idx = index(['src/a.ts', 'src/lib/b.ts', 'src/lib/c.ts', 'x.ts']);
+    const visible = computeVisibleNodes(idx, new Set(['src']));
+    expect(visible.map((v) => v.id)).toEqual(['d:src/lib', 'f:src/a.ts', 'f:x.ts']);
+    expect(visible.every((v) => v.parentId === null && v.depth === 0)).toBe(true);
   });
 });

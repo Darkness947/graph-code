@@ -10,6 +10,8 @@ import {
   layoutGraph,
 } from './layout.js';
 
+// Files outside the folder under test, so that folder is not a wrapper (decision D-05).
+const OTHERS = Array.from({ length: 12 }, (_, i) => `other${i}.ts`);
 const layout = (graph, expanded = []) => layoutGraph(buildGraphIndex(graph), new Set(expanded));
 const node = (result, id) => result.nodes.find((n) => n.id === id);
 
@@ -54,7 +56,7 @@ describe('layoutGraph', () => {
   });
 
   it('gives an expanded folder at least 180 × 80', () => {
-    const result = layout(makeGraph(['a/b/c.ts']), ['a', 'a/b']);
+    const result = layout(makeGraph(['a/b/c.ts', ...OTHERS]), ['a', 'a/b']);
     const b = node(result, 'd:a/b');
     expect(b.width).toBeGreaterThanOrEqual(FOLDER_MIN.width);
     expect(b.height).toBeGreaterThanOrEqual(FOLDER_MIN.height);
@@ -62,7 +64,7 @@ describe('layoutGraph', () => {
 
   it('wraps a folder with more than 8 direct children into a grid', () => {
     const files = Array.from({ length: 12 }, (_, i) => `many/f${i}.ts`);
-    const result = layout(makeGraph(files), ['many']);
+    const result = layout(makeGraph([...files, ...OTHERS]), ['many']);
     const kids = result.nodes.filter((n) => n.parentId === 'd:many');
     const rows = new Set(kids.map((n) => n.position.y));
     const cols = new Set(kids.map((n) => n.position.x));
@@ -74,7 +76,7 @@ describe('layoutGraph', () => {
   it('keeps a folder with 8 children connected by imports in a Dagre layout', () => {
     const files = Array.from({ length: 8 }, (_, i) => `chain/f${i}.ts`);
     const imports = files.slice(1).map((f, i) => [files[i], f]);
-    const result = layout(makeGraph(files, imports), ['chain']);
+    const result = layout(makeGraph([...files, ...OTHERS], imports), ['chain']);
     const ys = files.map((f) => node(result, `f:${f}`).position.y);
     expect([...ys].sort((a, b) => a - b)).toEqual(ys);
     expect(new Set(ys).size).toBe(8);
@@ -140,7 +142,9 @@ describe('layoutGraph', () => {
   it('orders a wrapped grid so importers come before what they import', () => {
     const files = Array.from({ length: 10 }, (_, i) => `grid/f${i}.ts`);
     // f9 imports f0; everything else is unrelated.
-    const result = layout(makeGraph(files, [['grid/f9.ts', 'grid/f0.ts']]), ['grid']);
+    const result = layout(makeGraph([...files, ...OTHERS], [['grid/f9.ts', 'grid/f0.ts']]), [
+      'grid',
+    ]);
     const order = result.nodes
       .filter((n) => n.parentId === 'd:grid')
       .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
@@ -163,7 +167,7 @@ describe('layoutGraph', () => {
     const long = result.edges.find((e) => e.id === 'f:a.ts->f:c.ts');
     const short = result.edges.find((e) => e.id === 'f:a.ts->f:b.ts');
     expect(short.data.route).toBeNull();
-    const route = long.data.route;
+    const route = long.data.route.points;
     const a = node(result, 'f:a.ts');
     const c = node(result, 'f:c.ts');
     expect(route[0]).toEqual({ x: a.position.x + a.width / 2, y: a.position.y + a.height });
@@ -179,5 +183,88 @@ describe('layoutGraph', () => {
 
   it('copes with an empty graph', () => {
     expect(layout(makeGraph([]))).toEqual({ nodes: [], edges: [] });
+  });
+});
+
+describe('edge ports', () => {
+  // `app/page.tsx` imports `lib/deep/math.ts`; both folders are expanded and siblings at the top.
+  const graph = makeGraph(
+    ['app/page.tsx', 'app/other.tsx', 'lib/deep/math.ts', 'lib/x.ts', 'z1.ts', 'z2.ts', 'z3.ts'],
+    [['app/page.tsx', 'lib/deep/math.ts']],
+  );
+  const result = layoutGraph(buildGraphIndex(graph), new Set(['app', 'lib', 'lib/deep']));
+  const abs = (id) => {
+    let x = 0;
+    let y = 0;
+    for (let n = node(result, id); n; n = node(result, n.parentId)) {
+      x += n.position.x;
+      y += n.position.y;
+    }
+    return { x, y, ...node(result, id) };
+  };
+
+  it('leaves through the bottom of each tray and enters through the top of each tray', () => {
+    const { points } = result.edges.find((e) => e.id === 'f:app/page.tsx->f:lib/deep/math.ts').data
+      .route;
+    const page = abs('f:app/page.tsx');
+    const app = abs('d:app');
+    const lib = abs('d:lib');
+    const deep = abs('d:lib/deep');
+    const math = abs('f:lib/deep/math.ts');
+    expect(points[0]).toEqual({ x: page.x + page.width / 2, y: page.y + page.height });
+    expect(points[1]).toEqual({ x: app.x + app.width / 2, y: app.y + app.height });
+    expect(points.at(-3)).toEqual({ x: lib.x + lib.width / 2, y: lib.y });
+    expect(points.at(-2)).toEqual({ x: deep.x + deep.width / 2, y: deep.y });
+    expect(points.at(-1)).toEqual({ x: math.x + math.width / 2, y: math.y });
+  });
+
+  it('puts the count badge on the stretch between the two trays', () => {
+    const { points, label } = result.edges.find(
+      (e) => e.id === 'f:app/page.tsx->f:lib/deep/math.ts',
+    ).data.route;
+    const app = abs('d:app');
+    const lib = abs('d:lib');
+    expect(points[label].y).toBeGreaterThanOrEqual(app.y + app.height);
+    expect(points[label + 1].y).toBeLessThanOrEqual(lib.y);
+  });
+});
+
+describe('wrapper folders (decision D-05)', () => {
+  const graph = makeGraph(
+    ['src/a.ts', 'src/b.ts', 'src/lib/c.ts', 'src/lib/d.ts', 'x.ts'],
+    [['src/a.ts', 'src/lib/c.ts']],
+  );
+
+  it('draws an expanded wrapper without a tray, its children at the top level', () => {
+    const result = layoutGraph(buildGraphIndex(graph), new Set(['src']));
+    expect(node(result, 'd:src')).toBeUndefined();
+    expect(node(result, 'f:src/a.ts').parentId).toBeUndefined();
+    expect(node(result, 'f:src/a.ts').data.hint).toBe('src');
+    expect(node(result, 'd:src/lib').parentId).toBeUndefined();
+  });
+
+  it('draws a collapsed wrapper as an ordinary collapsed folder', () => {
+    const result = layoutGraph(buildGraphIndex(graph), new Set());
+    expect(node(result, 'd:src').data).toMatchObject({ expanded: false, fileCount: 4 });
+  });
+});
+
+describe('edge ports inside a wrapped grid', () => {
+  // `big` has 9 children, so it is a grid with no Dagre routes; two of them are trays.
+  const files = [
+    'big/a/x.ts',
+    'big/b/y.ts',
+    ...Array.from({ length: 7 }, (_, i) => `big/f${i}.ts`),
+    ...Array.from({ length: 12 }, (_, i) => `o${i}.ts`),
+  ];
+  const graph = makeGraph(files, [['big/a/x.ts', 'big/b/y.ts']]);
+  const result = layoutGraph(buildGraphIndex(graph), new Set(['big', 'big/a', 'big/b']));
+
+  it('routes through the two ports alone, with the badge between them', () => {
+    const { points, label } = result.edges.find((e) => e.id === 'f:big/a/x.ts->f:big/b/y.ts').data
+      .route;
+    expect(points).toHaveLength(4);
+    expect(label).toBe(1);
+    expect(points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
   });
 });

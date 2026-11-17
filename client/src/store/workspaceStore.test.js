@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SAMPLE } from '../../test/graphFixture.js';
+import { makeGraph, SAMPLE } from '../../test/graphFixture.js';
 import { useWorkspaceStore } from './workspaceStore.js';
 
 const state = () => useWorkspaceStore.getState();
@@ -56,5 +56,12 @@ describe('workspaceStore', () => {
     expect(state().hoveredNodeId).toBe('f:index.ts');
     state().setHovered(null);
     expect(state().hoveredNodeId).toBeNull();
+  });
+});
+
+describe('workspaceStore wrapper folders (decision D-05)', () => {
+  it('opens wrapper folders in place on load', () => {
+    useWorkspaceStore.getState().loadGraph(makeGraph(['src/a.ts', 'src/b.ts', 'src/c.ts', 'x.ts']));
+    expect([...useWorkspaceStore.getState().expandedFolders]).toEqual(['src']);
   });
 });

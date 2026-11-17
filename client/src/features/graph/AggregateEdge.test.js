@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { routedPath, strokeFor } from './AggregateEdge.jsx';
 
 describe('routedPath', () => {
-  const route = [
-    { x: 0, y: 0 },
-    { x: 50, y: 100 },
-    { x: 0, y: 200 },
-  ];
+  const route = {
+    points: [
+      { x: 0, y: 0 },
+      { x: 50, y: 100 },
+      { x: 0, y: 200 },
+    ],
+    label: 1,
+  };
 
   it('starts and ends at the handles and passes through the route', () => {
     const [d, labelX, labelY] = routedPath(route, 0, 0, 0, 200);
@@ -14,6 +17,26 @@ describe('routedPath', () => {
     expect(d.endsWith('0,200')).toBe(true);
     expect(d).toContain(' 50,100');
     expect([labelX, labelY]).toEqual([25, 150]);
+  });
+
+  it('stays finite when points coincide and puts the label on the chosen segment', () => {
+    const [d, labelX, labelY] = routedPath(
+      {
+        points: [
+          { x: 0, y: 0 },
+          { x: 0, y: 0 },
+          { x: 0, y: 100 },
+          { x: 40, y: 100 },
+        ],
+        label: 2,
+      },
+      0,
+      0,
+      40,
+      100,
+    );
+    expect(d).not.toContain('NaN');
+    expect([labelX, labelY]).toEqual([20, 100]);
   });
 
   it('carries the inner points along when the ends move (during animation)', () => {

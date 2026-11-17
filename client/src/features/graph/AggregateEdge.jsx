@@ -3,13 +3,29 @@ import { memo } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
 import { countOf } from '../repos/messages.js';
 
+const reach = (a, b) => Math.hypot(b.x - a.x, b.y - a.y) ** 0.5;
+
+/** The Bézier control point next to `p1` on the segment p1 -> p2 (centripetal, alpha 0.5). */
+function control(p0, p1, p2) {
+  const d1 = reach(p0, p1);
+  const d2 = reach(p1, p2);
+  if (d1 === 0 || d2 === 0) return p1;
+  const k = 3 * d1 * (d1 + d2);
+  const w = 2 * d1 * d1 + 3 * d1 * d2 + d2 * d2;
+  return {
+    x: (d1 * d1 * p2.x - d2 * d2 * p0.x + w * p1.x) / k,
+    y: (d1 * d1 * p2.y - d2 * d2 * p0.y + w * p1.y) / k,
+  };
+}
+
 /**
  * A smooth path through Dagre's route (so long edges bend around the nodes between their
  * ends), pinned to the handles React Flow reports. While nodes animate, the inner points
  * follow the ends proportionally.
- * @returns {[string, number, number]} the SVG path and the label position
+ * @param {{ points: Array<{ x: number, y: number }>, label: number }} route from the layout
+ * @returns {[string, number, number]} the SVG path and the label position (middle of segment `label`)
  */
-export function routedPath(route, sourceX, sourceY, targetX, targetY) {
+export function routedPath({ points: route, label }, sourceX, sourceY, targetX, targetY) {
   const n = route.length - 1;
   const ds = { x: sourceX - route[0].x, y: sourceY - route[0].y };
   const dt = { x: targetX - route[n].x, y: targetY - route[n].y };
@@ -17,20 +33,21 @@ export function routedPath(route, sourceX, sourceY, targetX, targetY) {
     const f = i / n;
     return { x: p.x + ds.x * (1 - f) + dt.x * f, y: p.y + ds.y * (1 - f) + dt.y * f };
   });
-  // Catmull-Rom through the points, as cubic Béziers.
+  // Centripetal Catmull-Rom through the points, as cubic Béziers: unlike the uniform form
+  // it never loops or overshoots where points are close together (at tray ports).
   let d = `M ${pts[0].x},${pts[0].y}`;
   for (let i = 0; i < n; i++) {
     const p0 = pts[i - 1] ?? pts[i];
     const p1 = pts[i];
     const p2 = pts[i + 1];
     const p3 = pts[i + 2] ?? p2;
-    const c1 = { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 };
-    const c2 = { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 };
+    const c1 = control(p0, p1, p2);
+    const c2 = control(p3, p2, p1);
     d += ` C ${c1.x},${c1.y} ${c2.x},${c2.y} ${p2.x},${p2.y}`;
   }
-  const mid = pts[Math.floor(n / 2)];
-  const next = pts[Math.floor(n / 2) + 1];
-  return [d, (mid.x + next.x) / 2, (mid.y + next.y) / 2];
+  const a = pts[label];
+  const b = pts[label + 1];
+  return [d, (a.x + b.x) / 2, (a.y + b.y) / 2];
 }
 
 /** Thicker for edges that stand for more imports, within 1.25–3 px. */
