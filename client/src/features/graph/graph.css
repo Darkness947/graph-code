@@ -11,7 +11,7 @@
 
   /* React Flow theme */
   --xy-background-color: var(--bg-canvas);
-  --xy-background-pattern-color: rgba(var(--text-primary-rgb), 0.07);
+  --xy-background-pattern-color: rgba(var(--text-primary-rgb), 0.1);
   --xy-edge-stroke: var(--edge-rest);
   --xy-controls-button-background-color: var(--bg-surface);
   --xy-controls-button-background-color-hover: var(--bg-surface-hover);

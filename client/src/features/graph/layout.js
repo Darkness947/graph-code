@@ -54,6 +54,8 @@ export function layoutGraph(index, expandedFolders) {
 
   const size = new Map();
   const position = new Map();
+  /** Dagre's edge routes per container, in that container's content frame. */
+  const routesIn = new Map();
 
   for (const v of visible) {
     if (v.kind === 'file') {
@@ -88,22 +90,24 @@ export function layoutGraph(index, expandedFolders) {
       }
     }
 
+    const links = new Set();
+    for (const edge of visibleEdges) {
+      const s = lift(edge.source, containerId);
+      const t = lift(edge.target, containerId);
+      if (s && t && s !== t) links.add(`${s}\n${t}`);
+    }
+
     let placed;
     if (containerId !== null && kids.length > WRAP_AFTER) {
-      placed = grid(kids, size, Math.ceil(Math.sqrt(kids.length * 1.5)));
+      placed = grid(flowOrder(kids, links), size, Math.ceil(Math.sqrt(kids.length * 1.5)));
     } else {
-      const links = new Set();
-      for (const edge of visibleEdges) {
-        const s = lift(edge.source, containerId);
-        const t = lift(edge.target, containerId);
-        if (s && t && s !== t) links.add(`${s}\n${t}`);
-      }
       placed = connectedThenGrid(kids, links, size, containerId === null ? 'top' : 'folder');
     }
 
     const offset = containerId === null ? { x: 0, y: 0 } : { x: FOLDER_PAD, y: FOLDER_HEADER };
     for (const [id, p] of placed.positions)
       position.set(id, { x: p.x + offset.x, y: p.y + offset.y });
+    routesIn.set(containerId, { routes: placed.routes, offset });
     return placed;
   };
 
@@ -141,6 +145,42 @@ export function layoutGraph(index, expandedFolders) {
     };
   });
 
+  /** A node's top-left corner in canvas coordinates. */
+  const absolute = (id) => {
+    let x = 0;
+    let y = 0;
+    for (let cur = id; cur != null; cur = visById.get(cur).parentId) {
+      x += position.get(cur).x;
+      y += position.get(cur).y;
+    }
+    return { x, y };
+  };
+  /**
+   * Dagre's route for an edge between two children of the same container, in canvas
+   * coordinates, when it passes through ranks in between (so it can bend around the nodes
+   * there). Edges between neighbouring ranks are drawn as a plain curve instead.
+   */
+  const routeOf = (e) => {
+    const container = visById.get(e.source).parentId;
+    if (visById.get(e.target).parentId !== container) return null;
+    const { routes, offset } = routesIn.get(container);
+    const points = routes.get(`${e.source}\n${e.target}`);
+    if (!points || points.length <= 3) return null;
+    const origin = container === null ? { x: 0, y: 0 } : absolute(container);
+    const route = points.map((p) => ({
+      x: p.x + offset.x + origin.x,
+      y: p.y + offset.y + origin.y,
+    }));
+    // Dagre ends a route where it crosses the node border; pin the ends to the handles
+    // instead (bottom centre of the importer, top centre of the imported file).
+    const from = absolute(e.source);
+    const to = absolute(e.target);
+    route[0] = { x: from.x + size.get(e.source).width / 2, y: from.y + size.get(e.source).height };
+    route[route.length - 1] = { x: to.x + size.get(e.target).width / 2, y: to.y };
+    return route;
+  };
+  /** How deep the edge's deeper end is nested; drawing order follows it so edges sit inside their tray. */
+  const depthOf = (e) => Math.max(visById.get(e.source).depth, visById.get(e.target).depth);
   /** The folder a click on an aggregated edge expands: its target, when that is a folder (item 3). */
   const expandPath = (e) => {
     const target = index.nodesById.get(e.target);
@@ -152,11 +192,35 @@ export function layoutGraph(index, expandedFolders) {
     source: e.source,
     target: e.target,
     type: 'aggregate',
-    zIndex: Math.max(visById.get(e.source).depth, visById.get(e.target).depth),
-    data: { count: e.count, aggregated: e.aggregated, expandPath: expandPath(e) },
+    zIndex: depthOf(e),
+    data: {
+      count: e.count,
+      aggregated: e.aggregated,
+      expandPath: expandPath(e),
+      depth: depthOf(e),
+      route: routeOf(e),
+    },
   }));
 
   return { nodes, edges };
+}
+
+/**
+ * Orders a wrapped grid so it reads top to bottom like the rest of the canvas: children that
+ * import their siblings come first, children their siblings import come last. Ties keep the
+ * directory order (folders first, then by name).
+ */
+export function flowOrder(ids, links) {
+  const score = new Map(ids.map((id) => [id, 0]));
+  for (const key of links) {
+    const [s, t] = key.split('\n');
+    score.set(s, score.get(s) + 1);
+    score.set(t, score.get(t) - 1);
+  }
+  return ids
+    .map((id, i) => ({ id, i }))
+    .sort((a, b) => score.get(b.id) - score.get(a.id) || a.i - b.i)
+    .map((x) => x.id);
 }
 
 /**
@@ -181,9 +245,17 @@ function connectedThenGrid(ids, links, size, level) {
   const shift = (from, dx, dy) => {
     for (const [id, p] of from.positions) positions.set(id, { x: p.x + dx, y: p.y + dy });
   };
-  shift(top, (width - top.width) / 2, 0);
+  const topShift = (width - top.width) / 2;
+  shift(top, topShift, 0);
   shift(bottom, (width - bottom.width) / 2, top.height + gapY);
-  return { positions, width, height: top.height + gapY + bottom.height };
+  const routes = new Map();
+  for (const [key, points] of top.routes) {
+    routes.set(
+      key,
+      points.map((p) => ({ x: p.x + topShift, y: p.y })),
+    );
+  }
+  return { positions, routes, width, height: top.height + gapY + bottom.height };
 }
 
 function runDagre(ids, links, size, spacing) {
@@ -217,7 +289,16 @@ function runDagre(ids, links, size, spacing) {
   }
   const positions = new Map();
   for (const [id, p] of raw) positions.set(id, { x: p.x - minX, y: p.y - minY });
-  return { positions, width: maxX - minX, height: maxY - minY };
+  const routes = new Map();
+  for (const key of links) {
+    const [s, t] = key.split('\n');
+    const points = g.edge(s, t)?.points ?? [];
+    routes.set(
+      key,
+      points.map((p) => ({ x: p.x - minX, y: p.y - minY })),
+    );
+  }
+  return { positions, routes, width: maxX - minX, height: maxY - minY };
 }
 
 /** A grid in the given order: each column as wide as its widest item, each row as tall as its tallest. */
@@ -239,7 +320,7 @@ function grid(ids, size, columns) {
     positions.set(id, { x: colX[c] + (colW[c] - s.width) / 2, y: rowY[Math.floor(i / cols)] });
   });
   const total = (list) => list.reduce((a, b) => a + b, 0) + GAP * (list.length - 1);
-  return { positions, width: total(colW), height: total(rowH) };
+  return { positions, routes: new Map(), width: total(colW), height: total(rowH) };
 }
 
 function prefix(list) {
@@ -253,5 +334,5 @@ function prefix(list) {
 }
 
 function empty() {
-  return { positions: new Map(), width: 0, height: 0 };
+  return { positions: new Map(), routes: new Map(), width: 0, height: 0 };
 }

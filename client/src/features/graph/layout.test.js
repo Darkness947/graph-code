@@ -137,6 +137,46 @@ describe('layoutGraph', () => {
     expect(edge.data).toMatchObject({ aggregated: true, expandPath: null });
   });
 
+  it('orders a wrapped grid so importers come before what they import', () => {
+    const files = Array.from({ length: 10 }, (_, i) => `grid/f${i}.ts`);
+    // f9 imports f0; everything else is unrelated.
+    const result = layout(makeGraph(files, [['grid/f9.ts', 'grid/f0.ts']]), ['grid']);
+    const order = result.nodes
+      .filter((n) => n.parentId === 'd:grid')
+      .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
+      .map((n) => n.data.name);
+    expect(order[0]).toBe('f9.ts');
+    expect(order.at(-1)).toBe('f0.ts');
+  });
+
+  it('routes an edge that skips a rank around the node in between', () => {
+    // a -> b -> c and a -> c: the a -> c edge passes the rank of b.
+    const graph = makeGraph(
+      ['a.ts', 'b.ts', 'c.ts'],
+      [
+        ['a.ts', 'b.ts'],
+        ['b.ts', 'c.ts'],
+        ['a.ts', 'c.ts'],
+      ],
+    );
+    const result = layout(graph);
+    const long = result.edges.find((e) => e.id === 'f:a.ts->f:c.ts');
+    const short = result.edges.find((e) => e.id === 'f:a.ts->f:b.ts');
+    expect(short.data.route).toBeNull();
+    const route = long.data.route;
+    const a = node(result, 'f:a.ts');
+    const c = node(result, 'f:c.ts');
+    expect(route[0]).toEqual({ x: a.position.x + a.width / 2, y: a.position.y + a.height });
+    expect(route.at(-1)).toEqual({ x: c.position.x + c.width / 2, y: c.position.y });
+    // Beside b, not through it.
+    const b = node(result, 'f:b.ts');
+    const level = route.filter((p) => p.y > b.position.y && p.y < b.position.y + b.height);
+    expect(level.length).toBeGreaterThan(0);
+    for (const p of level) {
+      expect(p.x < b.position.x || p.x > b.position.x + b.width).toBe(true);
+    }
+  });
+
   it('copes with an empty graph', () => {
     expect(layout(makeGraph([]))).toEqual({ nodes: [], edges: [] });
   });
