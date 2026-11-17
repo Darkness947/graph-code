@@ -152,30 +152,49 @@ export function layoutGraph(index, expandedFolders) {
     }
     return { x, y };
   };
+  const handleBelow = (id) => {
+    const a = absolute(id);
+    return { x: a.x + size.get(id).width / 2, y: a.y + size.get(id).height };
+  };
+  const handleAbove = (id) => {
+    const a = absolute(id);
+    return { x: a.x + size.get(id).width / 2, y: a.y };
+  };
   /**
-   * Dagre's route for an edge between two children of the same container, in canvas
-   * coordinates, when it passes through ranks in between (so it can bend around the nodes
-   * there). Edges between neighbouring ranks are drawn as a plain curve instead.
+   * The path an edge follows, in canvas coordinates, or null for a plain curve.
+   * - It leaves the importer at its bottom centre and, when the importer sits inside expanded
+   *   folders, leaves each of their trays through the tray's bottom centre (a port).
+   * - At the innermost folder holding both ends it follows Dagre's route, which bends around
+   *   the nodes on the ranks it passes.
+   * - It enters each tray around the imported node through the tray's top centre, and ends at
+   *   the node's top centre.
+   * Edges into a folder therefore arrive as one bundle instead of crossing it. An edge between
+   * neighbouring siblings has no route and is drawn as a plain curve.
+   * `label` is the segment (between points label and label + 1) that carries the count badge.
    */
   const routeOf = (e) => {
-    const container = visById.get(e.source).parentId;
-    if (visById.get(e.target).parentId !== container) return null;
+    const up = chain(e.source);
+    const down = chain(e.target);
+    const at = new Map(down.map((id, i) => [id, i]));
+    const i = up.findIndex((id, k) => k > 0 && at.has(id));
+    const container = up[i];
+    const sourceSide = up.slice(0, i);
+    const targetSide = down.slice(0, at.get(container));
+
     const { routes, offset } = routesIn.get(container);
-    const points = routes.get(`${e.source}\n${e.target}`);
-    if (!points || points.length <= 3) return null;
+    const dagrePoints = routes.get(`${sourceSide.at(-1)}\n${targetSide.at(-1)}`) ?? [];
+    if (sourceSide.length === 1 && targetSide.length === 1 && dagrePoints.length <= 3) return null;
+
     const origin = container === null ? { x: 0, y: 0 } : absolute(container);
-    const route = points.map((p) => ({
-      x: p.x + offset.x + origin.x,
-      y: p.y + offset.y + origin.y,
-    }));
-    // Dagre ends a route where it crosses the node border. Pin the ends to the handles of
-    // the laid-out nodes instead (bottom centre of the importer, top centre of the imported),
-    // so the route matches what React Flow reports once the nodes are at rest.
-    const from = absolute(e.source);
-    const to = absolute(e.target);
-    route[0] = { x: from.x + size.get(e.source).width / 2, y: from.y + size.get(e.source).height };
-    route[route.length - 1] = { x: to.x + size.get(e.target).width / 2, y: to.y };
-    return route;
+    const middle = dagrePoints
+      .slice(1, -1)
+      .map((p) => ({ x: p.x + offset.x + origin.x, y: p.y + offset.y + origin.y }));
+    const exits = sourceSide.map(handleBelow);
+    const entries = targetSide.map(handleAbove).reverse();
+    return {
+      points: [...exits, ...middle, ...entries],
+      label: exits.length - 1 + Math.floor(middle.length / 2),
+    };
   };
 
   const edges = visibleEdges.map((e) => {

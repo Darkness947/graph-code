@@ -310,6 +310,16 @@
 .gc-edge-badge {
   position: absolute;
   pointer-events: all;
+  /* Quiet at rest so many badges don't crowd the canvas; full strength when its edge is
+     hovered, or when the badge itself is pointed at or focused. */
+  opacity: 0.45;
+  transition: opacity 120ms ease;
+}
+
+.gc-edge-badge.is-active,
+.gc-edge-badge:hover,
+.gc-edge-badge:focus-within {
+  opacity: 1;
 }
 
 .gc-edge-badge > button,
@@ -435,7 +445,8 @@
   .gc-stack::before,
   .gc-stack::after,
   .gc-file,
-  .gc-edge-arrow {
+  .gc-edge-arrow,
+  .gc-edge-badge {
     transition: none;
   }
 }

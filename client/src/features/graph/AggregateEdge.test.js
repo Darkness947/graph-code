@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { routedPath, strokeFor } from './AggregateEdge.jsx';
 
 describe('routedPath', () => {
-  const route = [
-    { x: 0, y: 0 },
-    { x: 50, y: 100 },
-    { x: 0, y: 200 },
-  ];
+  const route = {
+    points: [
+      { x: 0, y: 0 },
+      { x: 50, y: 100 },
+      { x: 0, y: 200 },
+    ],
+    label: 1,
+  };
 
   it('starts and ends at the handles and passes through the route', () => {
     const [d, labelX, labelY] = routedPath(route, 0, 0, 0, 200);
