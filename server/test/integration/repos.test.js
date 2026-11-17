@@ -5,6 +5,7 @@ import { createApp } from '../../src/app.js';
 import { AppError } from '../../src/errors/AppError.js';
 import { tokenCryptoFromConfig } from '../../src/services/auth/tokenCrypto.js';
 import { hasTestDb, resetTestDatabase } from '../helpers/db.js';
+import { signIn } from '../helpers/auth.js';
 
 const config = {
   NODE_ENV: 'test',
@@ -40,20 +41,6 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
   let cookieB;
   const crypto = tokenCryptoFromConfig(config);
 
-  const cookieOf = (res) =>
-    (res.headers['set-cookie'] ?? []).find((c) => c.startsWith('gc.sid='))?.split(';')[0];
-
-  async function signIn(ghId) {
-    oauth.exchangeCode.mockResolvedValue({ token: `gho_${ghId}`, scopes: '' });
-    oauth.fetchUser.mockResolvedValue({ id: ghId, login: `user${ghId}`, avatarUrl: null });
-    const start = await request(app).get('/api/auth/github');
-    const state = new URL(start.headers.location).searchParams.get('state');
-    const cb = await request(app)
-      .get(`/api/auth/github/callback?code=abc&state=${state}`)
-      .set('Cookie', cookieOf(start));
-    return cookieOf(cb);
-  }
-
   const post = (cookie, repo) =>
     request(app).post('/api/repos').set('Cookie', cookie).send({ repo });
 
@@ -67,8 +54,8 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
       enqueue,
       addRepoLimit: { windowMs: 60_000, limit: 1000 },
     });
-    cookieA = await signIn(201);
-    cookieB = await signIn(202);
+    cookieA = await signIn(app, oauth, 201);
+    cookieB = await signIn(app, oauth, 202);
   });
   afterAll(async () => {
     await pool?.end();
@@ -561,7 +548,7 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
     ])(
       '%s: 401 UNAUTHENTICATED, token deleted, session ended, logged without the token',
       async (_, call) => {
-        const cookie = await signIn(203);
+        const cookie = await signIn(app, oauth, 203);
         github.listUserRepositories.mockRejectedValue(rejected());
         github.getRepository.mockRejectedValue(rejected());
         const log = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -590,8 +577,8 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
     );
 
     it("ends the same user's sessions on other devices too", async () => {
-      const deviceA = await signIn(205);
-      const deviceB = await signIn(205);
+      const deviceA = await signIn(app, oauth, 205);
+      const deviceB = await signIn(app, oauth, 205);
       github.listUserRepositories.mockRejectedValue(rejected());
       vi.spyOn(console, 'error').mockImplementationOnce(() => {});
       expect((await request(app).get('/api/github/repos').set('Cookie', deviceA)).status).toBe(401);
@@ -600,11 +587,11 @@ describe.skipIf(!hasTestDb)('repository endpoints (integration, test database)',
     });
 
     it('signing in again stores a fresh token', async () => {
-      const cookie = await signIn(204);
+      const cookie = await signIn(app, oauth, 204);
       github.listUserRepositories.mockRejectedValue(rejected());
       vi.spyOn(console, 'error').mockImplementationOnce(() => {});
       await request(app).get('/api/github/repos').set('Cookie', cookie);
-      const again = await signIn(204);
+      const again = await signIn(app, oauth, 204);
       github.listUserRepositories.mockResolvedValue([]);
       const res = await request(app).get('/api/github/repos').set('Cookie', again);
       expect(res.status).toBe(200);

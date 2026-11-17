@@ -1,5 +1,6 @@
 import { AppError } from '../../errors/AppError.js';
 import { JOB_COLUMNS, mapJob } from '../ingestion/jobRepository.js';
+import { withTransaction } from '../../db/transaction.js';
 
 /**
  * Maps a repository row (with joined latest-job columns) to the Repository object (spec 6.2).
@@ -56,28 +57,6 @@ async function findActiveJobId(db, repoId) {
     [repoId, ACTIVE_STATUSES],
   );
   return rows[0]?.id ?? null;
-}
-
-/**
- * Runs `fn` with a client inside BEGIN/COMMIT; rolls back and rethrows on any error.
- * @template T
- * @param {import('pg').Pool} pool
- * @param {(client: import('pg').PoolClient) => Promise<T>} fn
- * @returns {Promise<T>}
- */
-async function withTransaction(pool, fn) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await fn(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
 }
 
 /**
