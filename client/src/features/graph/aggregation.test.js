@@ -24,14 +24,13 @@ describe('aggregateEdges', () => {
       target: 'd:src',
       count: 1,
       aggregated: true,
-      edgeIds: [1],
     });
   });
 
   it('merges every import between two collapsed folders into one counted edge', () => {
     const edges = byId(visibleEdges(SAMPLE, []));
     // app/page.tsx -> src/lib/utils.ts and app/blog/page.tsx -> src/lib/deep/math.ts
-    expect(edges['d:app->d:src']).toMatchObject({ count: 2, aggregated: true, edgeIds: [5, 7] });
+    expect(edges['d:app->d:src']).toMatchObject({ count: 2, aggregated: true });
   });
 
   it('drops edges whose two ends fall in the same collapsed folder', () => {

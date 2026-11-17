@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAMPLE } from '../../../test/graphFixture.js';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
-import GraphCanvas from './GraphCanvas.jsx';
+import GraphCanvas, { changedFolder } from './GraphCanvas.jsx';
 import { LAYOUT_FAILED } from './GraphFallbackList.jsx';
 import * as layoutModule from './layout.js';
 
@@ -127,5 +127,22 @@ describe('GraphCanvas', () => {
         .map((c) => c.textContent),
     ).toEqual(['src/lib/utils.ts', '1', '3']);
     expect(screen.queryByTestId('graph-canvas')).toBeNull();
+  });
+});
+
+describe('changedFolder', () => {
+  it('names the folder that was expanded or collapsed', () => {
+    expect(changedFolder(new Set(), new Set(['src']))).toBe('src');
+    expect(changedFolder(new Set(['src', 'app']), new Set(['app']))).toBe('src');
+  });
+
+  it('picks the deepest folder when ancestors open with it', () => {
+    expect(changedFolder(new Set(), new Set(['src', 'src/lib', 'src/lib/deep']))).toBe(
+      'src/lib/deep',
+    );
+  });
+
+  it('returns null when nothing changed', () => {
+    expect(changedFolder(new Set(['src']), new Set(['src']))).toBeNull();
   });
 });

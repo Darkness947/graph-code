@@ -38,22 +38,3 @@ export function buildGraphIndex(graph) {
 
   return { nodesById, childrenByPath, edges: graph.edges };
 }
-
-const folderIds = new WeakMap();
-
-/**
- * Folder id by folder path, computed once per index.
- * @param {ReturnType<typeof buildGraphIndex>} index
- * @returns {Map<string, string>}
- */
-export function folderIdsByPath(index) {
-  let map = folderIds.get(index);
-  if (!map) {
-    map = new Map();
-    for (const node of index.nodesById.values()) {
-      if (node.type === 'folder') map.set(node.path, node.id);
-    }
-    folderIds.set(index, map);
-  }
-  return map;
-}

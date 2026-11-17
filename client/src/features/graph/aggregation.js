@@ -7,7 +7,7 @@
  */
 
 /**
- * @typedef {{ id: string, source: string, target: string, count: number, aggregated: boolean, edgeIds: Array<string | number> }} VisibleEdge
+ * @typedef {{ id: string, source: string, target: string, count: number, aggregated: boolean }} VisibleEdge
  */
 
 /**
@@ -26,9 +26,8 @@ export function aggregateEdges(edges, ancestorMap, nodesById) {
     const found = merged.get(key);
     if (found) {
       found.count += 1;
-      found.edgeIds.push(edge.id);
     } else {
-      merged.set(key, { id: key, source, target, count: 1, aggregated: false, edgeIds: [edge.id] });
+      merged.set(key, { id: key, source, target, count: 1, aggregated: false });
     }
   }
   const isFolder = (id) => nodesById.get(id)?.type === 'folder';

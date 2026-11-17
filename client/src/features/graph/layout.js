@@ -43,7 +43,7 @@ export function layoutGraph(index, expandedFolders) {
   const visible = computeVisibleNodes(index, expandedFolders);
   const ancestors = buildVisibleAncestorMap(index, expandedFolders);
   const visibleEdges = aggregateEdges(index.edges, ancestors, index.nodesById);
-  const thresholds = centralityThresholds([...index.nodesById.values()]);
+  const thresholds = thresholdsFor(index);
 
   const visById = new Map(visible.map((v) => [v.id, v]));
   const kidsOf = new Map([[null, []]]);
@@ -53,29 +53,39 @@ export function layoutGraph(index, expandedFolders) {
   }
 
   const size = new Map();
+  const tier = new Map();
   const position = new Map();
   /** Dagre's edge routes per container, in that container's content frame. */
   const routesIn = new Map();
 
   for (const v of visible) {
     if (v.kind === 'file') {
-      const tier = centralityTier(index.nodesById.get(v.id).metrics?.fanIn ?? 0, thresholds);
-      size.set(v.id, FILE_SIZES[tier]);
+      const t = centralityTier(index.nodesById.get(v.id).metrics?.fanIn ?? 0, thresholds);
+      tier.set(v.id, t);
+      size.set(v.id, FILE_SIZES[t]);
     } else if (!v.expanded) {
       size.set(v.id, FOLDER_SIZE);
     }
   }
 
-  /** The direct child of `container` that holds `id`, or null when `id` is outside it. */
-  const lift = (id, container) => {
-    let cur = id;
-    while (cur != null) {
-      const parent = visById.get(cur).parentId;
-      if (parent === container) return cur;
-      cur = parent;
-    }
-    return null;
+  // Each edge links two children of the innermost container holding both ends: one pass
+  // over the edges, grouped by that container.
+  const linksIn = new Map();
+  const chain = (id) => {
+    const out = [id];
+    for (let p = visById.get(id).parentId; p != null; p = visById.get(p).parentId) out.push(p);
+    out.push(null);
+    return out;
   };
+  for (const edge of visibleEdges) {
+    const up = chain(edge.source);
+    const down = chain(edge.target);
+    const at = new Map(down.map((id, i) => [id, i]));
+    const i = up.findIndex((id, k) => k > 0 && at.has(id));
+    const container = up[i];
+    if (!linksIn.has(container)) linksIn.set(container, new Set());
+    linksIn.get(container).add(`${up[i - 1]}\n${down[at.get(container) - 1]}`);
+  }
 
   /** Lays out a container's children; returns the size of the content. */
   const layoutContainer = (containerId) => {
@@ -90,19 +100,11 @@ export function layoutGraph(index, expandedFolders) {
       }
     }
 
-    const links = new Set();
-    for (const edge of visibleEdges) {
-      const s = lift(edge.source, containerId);
-      const t = lift(edge.target, containerId);
-      if (s && t && s !== t) links.add(`${s}\n${t}`);
-    }
-
-    let placed;
-    if (containerId !== null && kids.length > WRAP_AFTER) {
-      placed = grid(flowOrder(kids, links), size, Math.ceil(Math.sqrt(kids.length * 1.5)));
-    } else {
-      placed = connectedThenGrid(kids, links, size, containerId === null ? 'top' : 'folder');
-    }
+    const links = linksIn.get(containerId) ?? new Set();
+    const placed =
+      containerId !== null && kids.length > WRAP_AFTER
+        ? grid(flowOrder(kids, links), size, Math.ceil(Math.sqrt(kids.length * 1.5)))
+        : connectedThenGrid(kids, links, size, containerId === null ? 'top' : 'folder');
 
     const offset = containerId === null ? { x: 0, y: 0 } : { x: FOLDER_PAD, y: FOLDER_HEADER };
     for (const [id, p] of placed.positions)
@@ -115,21 +117,17 @@ export function layoutGraph(index, expandedFolders) {
 
   const nodes = visible.map((v) => {
     const node = index.nodesById.get(v.id);
-    const { width, height } = size.get(v.id);
+    const common = { name: node.name, path: node.path, hint: node.parentPath };
     const data =
       v.kind === 'file'
         ? {
-            name: node.name,
-            path: node.path,
-            hint: node.parentPath,
+            ...common,
             fanIn: node.metrics?.fanIn ?? 0,
             fanOut: node.metrics?.fanOut ?? 0,
-            tier: centralityTier(node.metrics?.fanIn ?? 0, thresholds),
+            tier: tier.get(v.id),
           }
         : {
-            name: node.name,
-            path: node.path,
-            hint: node.parentPath,
+            ...common,
             fileCount: node.metrics?.fileCount ?? 0,
             expanded: v.expanded,
             depth: v.depth,
@@ -139,8 +137,7 @@ export function layoutGraph(index, expandedFolders) {
       type: v.kind,
       position: position.get(v.id),
       ...(v.parentId ? { parentId: v.parentId } : {}),
-      width,
-      height,
+      ...size.get(v.id),
       data,
     };
   });
@@ -171,38 +168,45 @@ export function layoutGraph(index, expandedFolders) {
       x: p.x + offset.x + origin.x,
       y: p.y + offset.y + origin.y,
     }));
-    // Dagre ends a route where it crosses the node border; pin the ends to the handles
-    // instead (bottom centre of the importer, top centre of the imported file).
+    // Dagre ends a route where it crosses the node border. Pin the ends to the handles of
+    // the laid-out nodes instead (bottom centre of the importer, top centre of the imported),
+    // so the route matches what React Flow reports once the nodes are at rest.
     const from = absolute(e.source);
     const to = absolute(e.target);
     route[0] = { x: from.x + size.get(e.source).width / 2, y: from.y + size.get(e.source).height };
     route[route.length - 1] = { x: to.x + size.get(e.target).width / 2, y: to.y };
     return route;
   };
-  /** How deep the edge's deeper end is nested; drawing order follows it so edges sit inside their tray. */
-  const depthOf = (e) => Math.max(visById.get(e.source).depth, visById.get(e.target).depth);
-  /** The folder a click on an aggregated edge expands: its target, when that is a folder (item 3). */
-  const expandPath = (e) => {
+
+  const edges = visibleEdges.map((e) => {
+    // Drawing order follows the deeper end, so an edge sits inside the tray it runs in.
+    const depth = Math.max(visById.get(e.source).depth, visById.get(e.target).depth);
+    // A click on an aggregated edge expands its target when that is a folder (item 3).
     const target = index.nodesById.get(e.target);
-    return e.aggregated && target.type === 'folder' ? target.path : null;
-  };
-  const edges = visibleEdges.map((e) => ({
-    id: e.id,
-    ...(expandPath(e) ? { className: 'has-expand' } : {}),
-    source: e.source,
-    target: e.target,
-    type: 'aggregate',
-    zIndex: depthOf(e),
-    data: {
-      count: e.count,
-      aggregated: e.aggregated,
-      expandPath: expandPath(e),
-      depth: depthOf(e),
-      route: routeOf(e),
-    },
-  }));
+    const expandPath = e.aggregated && target.type === 'folder' ? target.path : null;
+    return {
+      id: e.id,
+      ...(expandPath ? { className: 'has-expand' } : {}),
+      source: e.source,
+      target: e.target,
+      type: 'aggregate',
+      zIndex: depth,
+      data: { count: e.count, aggregated: e.aggregated, expandPath, depth, route: routeOf(e) },
+    };
+  });
 
   return { nodes, edges };
+}
+
+/** Centrality cut-offs depend only on the graph, so they are computed once per index. */
+const thresholdCache = new WeakMap();
+function thresholdsFor(index) {
+  let t = thresholdCache.get(index);
+  if (!t) {
+    t = centralityThresholds([...index.nodesById.values()]);
+    thresholdCache.set(index, t);
+  }
+  return t;
 }
 
 /**

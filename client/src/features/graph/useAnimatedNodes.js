@@ -7,12 +7,20 @@ const mix = (a, b, t) => a + (b - a) * t;
 const reducedMotion = () =>
   Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
-/** One frame between the drawn nodes and the new layout, `k` in 0..1. */
-function between(from, target, k) {
-  const before = new Map(from.map((n) => [n.id, n]));
+const same = (p, n) =>
+  p.position.x === n.position.x &&
+  p.position.y === n.position.y &&
+  p.width === n.width &&
+  p.height === n.height;
+
+/**
+ * One frame between the drawn nodes (`before`, by id) and the new layout, `k` in 0..1. Nodes
+ * that do not move keep their layout object, so React Flow can skip them.
+ */
+function between(before, target, k) {
   return target.map((n) => {
     const p = before.get(n.id);
-    if (!p || p.parentId !== n.parentId) return n;
+    if (!p || p.parentId !== n.parentId || same(p, n)) return n;
     return {
       ...n,
       position: { x: mix(p.position.x, n.position.x, k), y: mix(p.position.y, n.position.y, k) },
@@ -31,16 +39,17 @@ function between(from, target, k) {
  * @returns {{ nodes: object[], moving: boolean }}
  */
 export function useAnimatedNodes(target) {
-  const [anim, setAnim] = useState({ target, from: target, nodes: target, moving: false });
+  const [anim, setAnim] = useState({ target, from: null, nodes: target, moving: false });
 
   // A new layout: start from what is drawn now (adjusting state during render, so no frame
   // of the final layout is ever shown before the motion starts).
   if (anim.target !== target) {
     const instant = reducedMotion();
+    const from = new Map(anim.nodes.map((n) => [n.id, n]));
     setAnim({
       target,
-      from: anim.nodes,
-      nodes: instant ? target : between(anim.nodes, target, 0),
+      from,
+      nodes: instant ? target : between(from, target, 0),
       moving: !instant,
     });
   }

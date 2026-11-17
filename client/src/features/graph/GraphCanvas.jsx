@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
 import AggregateEdge from './AggregateEdge.jsx';
 import CanvasErrorBoundary from './CanvasErrorBoundary.jsx';
-import { CanvasActions } from './canvasActions.js';
 import FileNode from './FileNode.jsx';
 import FolderNode from './FolderNode.jsx';
 import GraphFallbackList from './GraphFallbackList.jsx';
@@ -26,6 +25,20 @@ const edgeTypes = { aggregate: AggregateEdge };
 const FIT = { padding: 0.12, maxZoom: 1 };
 const minimapClass = (n) =>
   n.type === 'file' ? 'gc-mm-file' : n.data.expanded ? 'gc-mm-tray' : 'gc-mm-folder';
+
+/**
+ * The folder whose expand or collapse the user just asked for: the deepest path that changed
+ * between two sets of expanded folders (expanding a nested folder also opens the ones above it).
+ */
+export function changedFolder(before, after) {
+  let pick = null;
+  const consider = (path) => {
+    if (pick === null || path.split('/').length > pick.split('/').length) pick = path;
+  };
+  for (const p of after) if (!before.has(p)) consider(p);
+  for (const p of before) if (!after.has(p)) consider(p);
+  return pick;
+}
 
 /** A node's rectangle in canvas coordinates (layout positions are relative to the parent). */
 function absoluteRect(nodes, id) {
@@ -49,12 +62,11 @@ function absoluteRect(nodes, id) {
 function Canvas() {
   const graph = useWorkspaceStore((s) => s.graph);
   const expandedFolders = useWorkspaceStore((s) => s.expandedFolders);
-  const toggleInStore = useWorkspaceStore((s) => s.toggleFolder);
-  const expandInStore = useWorkspaceStore((s) => s.expandFolder);
+  const expandFolder = useWorkspaceStore((s) => s.expandFolder);
   const setHovered = useWorkspaceStore((s) => s.setHovered);
   const flow = useReactFlow();
   const flowStore = useStoreApi();
-  const keepInView = useRef(null);
+  const shownFolders = useRef(expandedFolders);
 
   const layout = useMemo(() => {
     try {
@@ -66,12 +78,15 @@ function Canvas() {
 
   const { nodes, moving } = useAnimatedNodes(layout.nodes);
 
-  // Keep the folder that was just expanded or collapsed in view (item 6). It moves only as
-  // far as needed, and zooms out only when the folder is larger than the screen.
+  // Keep the folder that was just expanded or collapsed in view (item 6), whoever changed it.
+  // The view moves only as far as needed, and zooms out only when the folder is larger than
+  // the screen.
   useEffect(() => {
-    const id = keepInView.current;
-    keepInView.current = null;
-    const rect = id && absoluteRect(layout.nodes, id);
+    const path = changedFolder(shownFolders.current, expandedFolders);
+    shownFolders.current = expandedFolders;
+    const folder =
+      path !== null && layout.nodes.find((n) => n.type === 'folder' && n.data.path === path);
+    const rect = folder && absoluteRect(layout.nodes, folder.id);
     if (!rect) return;
     const { width, height } = flowStore.getState();
     const { x, y, zoom } = flow.getViewport();
@@ -94,34 +109,20 @@ function Canvas() {
     } else {
       flow.fitBounds(rect, { padding: 0.08, duration: MOVE_MS });
     }
-  }, [layout, flow, flowStore]);
-
-  const actions = useMemo(
-    () => ({
-      toggleFolder: (path, nodeId) => {
-        keepInView.current = nodeId;
-        toggleInStore(path);
-      },
-    }),
-    [toggleInStore],
-  );
+  }, [layout, expandedFolders, flow, flowStore]);
 
   const onNodeDoubleClick = useCallback(
     (_event, node) => {
-      if (node.type !== 'folder' || node.data.expanded) return;
-      keepInView.current = node.id;
-      expandInStore(node.data.path);
+      if (node.type === 'folder' && !node.data.expanded) expandFolder(node.data.path);
     },
-    [expandInStore],
+    [expandFolder],
   );
 
   const onEdgeClick = useCallback(
     (_event, edge) => {
-      if (!edge.data.expandPath) return;
-      keepInView.current = edge.target;
-      expandInStore(edge.data.expandPath);
+      if (edge.data.expandPath) expandFolder(edge.data.expandPath);
     },
-    [expandInStore],
+    [expandFolder],
   );
 
   const onNodeMouseEnter = useCallback((_event, node) => setHovered(node.id), [setHovered]);
@@ -130,42 +131,40 @@ function Canvas() {
   if (layout.failed) return <GraphFallbackList nodes={graph.nodesById.values()} />;
 
   return (
-    <CanvasActions.Provider value={actions}>
-      <div className={`gc-canvas${moving ? ' is-moving' : ''}`} data-testid="graph-canvas">
-        <ReactFlow
-          nodes={nodes}
-          edges={layout.edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          colorMode="dark"
-          fitView
-          fitViewOptions={FIT}
-          minZoom={0.05}
-          maxZoom={2}
-          onlyRenderVisibleElements
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-          zoomOnDoubleClick={false}
-          onNodeDoubleClick={onNodeDoubleClick}
-          onEdgeClick={onEdgeClick}
-          onNodeMouseEnter={onNodeMouseEnter}
-          onNodeMouseLeave={onNodeMouseLeave}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={22} size={1} />
-          <Controls position="bottom-left" showInteractive={false} fitViewOptions={FIT} />
-          <MiniMap
-            position="bottom-right"
-            pannable
-            zoomable
-            nodeClassName={minimapClass}
-            nodeBorderRadius={4}
-            style={{ width: 150, height: 100 }}
-            ariaLabel="Graph overview"
-          />
-        </ReactFlow>
-      </div>
-    </CanvasActions.Provider>
+    <div className={`gc-canvas${moving ? ' is-moving' : ''}`} data-testid="graph-canvas">
+      <ReactFlow
+        nodes={nodes}
+        edges={layout.edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        colorMode="dark"
+        fitView
+        fitViewOptions={FIT}
+        minZoom={0.05}
+        maxZoom={2}
+        onlyRenderVisibleElements
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        zoomOnDoubleClick={false}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onEdgeClick={onEdgeClick}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={22} size={1} />
+        <Controls position="bottom-left" showInteractive={false} fitViewOptions={FIT} />
+        <MiniMap
+          position="bottom-right"
+          pannable
+          zoomable
+          nodeClassName={minimapClass}
+          nodeBorderRadius={4}
+          style={{ width: 150, height: 100 }}
+          ariaLabel="Graph overview"
+        />
+      </ReactFlow>
+    </div>
   );
 }
 

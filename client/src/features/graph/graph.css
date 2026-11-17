@@ -36,7 +36,8 @@
   color: var(--text-secondary);
 }
 
-/* Nodes are display-only in this task: no default chrome, no outline from React Flow. */
+/* Nodes are display-only in this task: no default chrome from React Flow. The focus ring
+   itself comes from the global :focus-visible rule; only its offset is set here. */
 .gc-canvas .react-flow__node {
   border: 0;
   padding: 0;
@@ -46,7 +47,6 @@
 }
 
 .gc-canvas .react-flow__node:focus-visible {
-  outline: 2px solid var(--accent-blue);
   outline-offset: 3px;
 }
 
@@ -250,7 +250,6 @@
 }
 
 .gc-chevron:focus-visible {
-  outline: 2px solid var(--accent-blue);
   outline-offset: 1px;
 }
 
@@ -348,11 +347,6 @@
   color: var(--text-primary);
 }
 
-.gc-edge-badge > button:focus-visible {
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 2px;
-}
-
 /* ---- Minimap and controls ---------------------------------------------- */
 
 .gc-canvas .react-flow__minimap {
@@ -386,7 +380,6 @@
 }
 
 .gc-canvas .react-flow__controls-button:focus-visible {
-  outline: 2px solid var(--accent-blue);
   outline-offset: -2px;
 }
 

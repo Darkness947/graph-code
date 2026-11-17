@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SAMPLE } from '../../../test/graphFixture.js';
-import { buildGraphIndex, folderIdsByPath } from './graphIndex.js';
-import { ancestorPaths, buildVisibleAncestorMap, computeVisibleNodes } from './visibility.js';
+import { buildGraphIndex } from './graphIndex.js';
+import { buildVisibleAncestorMap, computeVisibleNodes, folderChain } from './visibility.js';
 
 const index = buildGraphIndex(SAMPLE);
 const ids = (list) => list.map((v) => v.id);
@@ -15,10 +15,6 @@ describe('buildGraphIndex', () => {
       'f:app/page.tsx',
     ]);
     expect(index.edges).toBe(SAMPLE.edges);
-  });
-
-  it('finds folder ids by path', () => {
-    expect(folderIdsByPath(index).get('src/lib/deep')).toBe('d:src/lib/deep');
   });
 });
 
@@ -86,13 +82,9 @@ describe('buildVisibleAncestorMap', () => {
   });
 });
 
-describe('ancestorPaths', () => {
-  it('lists the folders above a path, outermost first', () => {
-    expect(ancestorPaths('src/lib/deep/math.ts')).toEqual(['src', 'src/lib', 'src/lib/deep']);
-    expect(ancestorPaths('index.ts')).toEqual([]);
-  });
-
-  it('can include the path itself', () => {
-    expect(ancestorPaths('src/lib', { includeSelf: true })).toEqual(['src', 'src/lib']);
+describe('folderChain', () => {
+  it('lists a path and the folders above it, outermost first', () => {
+    expect(folderChain('src/lib/deep')).toEqual(['src', 'src/lib', 'src/lib/deep']);
+    expect(folderChain('src')).toEqual(['src']);
   });
 });

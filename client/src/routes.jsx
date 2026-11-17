@@ -3,6 +3,7 @@ import { Outlet, Route, Routes } from 'react-router-dom';
 import AppToast from './components/AppToast.jsx';
 import Footer from './components/Footer.jsx';
 import NavBar from './components/NavBar.jsx';
+import PageSpinner from './components/PageSpinner.jsx';
 import ViewportNotice from './components/ViewportNotice.jsx';
 import ProtectedRoute from './features/auth/ProtectedRoute.jsx';
 import About from './pages/About.jsx';
@@ -14,16 +15,6 @@ import Privacy from './pages/Privacy.jsx';
 
 // The workspace carries React Flow and Dagre; load it only when a graph is opened.
 const Workspace = lazy(() => import('./pages/Workspace.jsx'));
-
-function PageSpinner() {
-  return (
-    <div className="centered-fill">
-      <div className="spinner-border text-primary" role="status">
-        <span className="visually-hidden">Loading…</span>
-      </div>
-    </div>
-  );
-}
 
 /** The frame every page shares: top bar, desktop notice, toast and the page itself. */
 function Layout() {

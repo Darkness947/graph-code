@@ -62,16 +62,11 @@ export function buildVisibleAncestorMap(index, expandedFolders) {
 }
 
 /**
- * The folder paths that must be expanded to show a node: every folder above it, outermost
- * first. Includes the node's own path when it is a folder and `includeSelf` is set.
+ * A folder path and every folder above it, outermost first: the folders to expand to open it.
  * @param {string} path
- * @param {{ includeSelf?: boolean }} [options]
  * @returns {string[]}
  */
-export function ancestorPaths(path, { includeSelf = false } = {}) {
+export function folderChain(path) {
   const parts = path.split('/');
-  const count = includeSelf ? parts.length : parts.length - 1;
-  const out = [];
-  for (let i = 1; i <= count; i++) out.push(parts.slice(0, i).join('/'));
-  return out;
+  return parts.map((_, i) => parts.slice(0, i + 1).join('/'));
 }

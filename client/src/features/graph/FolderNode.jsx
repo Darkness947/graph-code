@@ -1,16 +1,17 @@
-import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
-import { useCanvasActions } from './canvasActions.js';
+import { useWorkspaceStore } from '../../store/workspaceStore.js';
+import { countOf } from '../repos/messages.js';
+import Handles from './Handles.jsx';
 
-const files = (n) => `${n} ${n === 1 ? 'file' : 'files'}`;
+const files = (n) => countOf(n, 'file', 'files');
 
 /**
  * A folder on the canvas (spec 8.6 items 1 and 5). Collapsed, it is one node that stands for
  * everything inside it: name, file count and a chevron that expands it (double-click works
  * too). Expanded, it is a container sized around its children, with a chevron that collapses it.
  */
-function FolderNode({ id, data }) {
-  const { toggleFolder } = useCanvasActions();
+function FolderNode({ data }) {
+  const toggleFolder = useWorkspaceStore((s) => s.toggleFolder);
   const toggle = (
     <button
       type="button"
@@ -19,7 +20,7 @@ function FolderNode({ id, data }) {
       aria-expanded={data.expanded}
       onClick={(event) => {
         event.stopPropagation();
-        toggleFolder(data.path, id);
+        toggleFolder(data.path);
       }}
       onDoubleClick={(event) => event.stopPropagation()}
     >
@@ -33,7 +34,7 @@ function FolderNode({ id, data }) {
   if (data.expanded) {
     return (
       <div className={`gc-tray depth-${data.depth % 2}`}>
-        <Handle type="target" position={Position.Top} isConnectable={false} className="gc-handle" />
+        <Handles />
         <div className="gc-tray-header">
           <i className="bi bi-folder2-open gc-folder-icon" aria-hidden="true" />
           <span className="gc-folder-name" title={data.path}>
@@ -42,19 +43,13 @@ function FolderNode({ id, data }) {
           <span className="gc-folder-count">{files(data.fileCount)}</span>
           {toggle}
         </div>
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          isConnectable={false}
-          className="gc-handle"
-        />
       </div>
     );
   }
 
   return (
     <div className="gc-stack" title={data.path}>
-      <Handle type="target" position={Position.Top} isConnectable={false} className="gc-handle" />
+      <Handles />
       <div className="gc-stack-body">
         <i className="bi bi-folder2 gc-folder-icon" aria-hidden="true" />
         <div className="gc-stack-text">
@@ -66,12 +61,6 @@ function FolderNode({ id, data }) {
         </div>
         {toggle}
       </div>
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        isConnectable={false}
-        className="gc-handle"
-      />
     </div>
   );
 }

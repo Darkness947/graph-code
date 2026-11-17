@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { buildGraphIndex } from '../features/graph/graphIndex.js';
-import { ancestorPaths } from '../features/graph/visibility.js';
+import { folderChain } from '../features/graph/visibility.js';
 
 /** Workspace state (spec 8.8). `expandedFolders` is replaced, never mutated, so selectors see changes. */
 const initialState = () => ({
@@ -32,7 +32,7 @@ export const useWorkspaceStore = create((set, get) => ({
   /** Expands a folder and every folder above it, so it is visible and open. */
   expandFolder: (path) => {
     const { expandedFolders } = get();
-    const wanted = ancestorPaths(path, { includeSelf: true });
+    const wanted = folderChain(path);
     if (wanted.every((p) => expandedFolders.has(p))) return;
     set({ expandedFolders: new Set([...expandedFolders, ...wanted]) });
   },

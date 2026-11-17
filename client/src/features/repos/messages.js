@@ -76,3 +76,6 @@ export const removeErrorMessage = (err) =>
 export const REMOVE_CONFIRM = (displayName) =>
   `Remove ${displayName}? This deletes its dependency graph and cached AI results from Graph Code. Your repository on GitHub is not affected.`;
 export const REPO_REMOVED = 'Repository removed';
+
+/** "1 file", "1,234 files": a count with its noun. */
+export const countOf = (n, one, many) => `${n.toLocaleString('en')} ${n === 1 ? one : many}`;

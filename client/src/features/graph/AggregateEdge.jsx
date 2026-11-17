@@ -1,7 +1,7 @@
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@xyflow/react';
 import { memo } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
-import { useCanvasActions } from './canvasActions.js';
+import { countOf } from '../repos/messages.js';
 
 /**
  * A smooth path through Dagre's route (so long edges bend around the nodes between their
@@ -55,12 +55,12 @@ function AggregateEdge({
   data,
 }) {
   const active = useWorkspaceStore((s) => s.hoveredNodeId === source || s.hoveredNodeId === target);
-  const { toggleFolder } = useCanvasActions();
+  const expandFolder = useWorkspaceStore((s) => s.expandFolder);
   const [path, labelX, labelY] = data.route
     ? routedPath(data.route, sourceX, sourceY, targetX, targetY)
     : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
   const state = active ? ' is-active' : '';
-  const imports = `${data.count} ${data.count === 1 ? 'import' : 'imports'}`;
+  const imports = countOf(data.count, 'import', 'imports');
 
   return (
     <>
@@ -89,7 +89,7 @@ function AggregateEdge({
               <button
                 type="button"
                 aria-label={`${imports}. Expand folder ${data.expandPath}`}
-                onClick={() => toggleFolder(data.expandPath, target)}
+                onClick={() => expandFolder(data.expandPath)}
               >
                 {data.count}
               </button>

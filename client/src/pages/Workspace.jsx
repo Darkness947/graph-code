@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getGraph } from '../api/repos.js';
 import MessagePanel from '../components/MessagePanel.jsx';
+import PageSpinner from '../components/PageSpinner.jsx';
 import GraphCanvas from '../features/graph/GraphCanvas.jsx';
-import { formatDate, GENERIC_ERROR } from '../features/repos/messages.js';
+import { countOf, formatDate, GENERIC_ERROR } from '../features/repos/messages.js';
 import { handleUnauthenticated } from '../features/repos/useRepositories.js';
 import { useWorkspaceStore } from '../store/workspaceStore.js';
-
-const plural = (n, one, many) => `${n.toLocaleString('en')} ${n === 1 ? one : many}`;
 
 /** The 40 px strip above the workspace (spec 8.6 layout). */
 function HeaderStrip({ repository, files, edges }) {
@@ -26,7 +25,7 @@ function HeaderStrip({ repository, files, edges }) {
         <span className="ws-meta">Synced {formatDate(repository.lastIngestedAt)}</span>
       )}
       <span className="ws-meta">
-        {plural(files, 'file', 'files')} · {plural(edges, 'dependency', 'dependencies')}
+        {countOf(files, 'file', 'files')} · {countOf(edges, 'dependency', 'dependencies')}
       </span>
       <Link to="/dashboard" className="ws-back">
         Back to dashboard
@@ -74,13 +73,7 @@ export default function Workspace() {
   };
 
   if (state.status === 'loading') {
-    return (
-      <div className="centered-fill">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading graph…</span>
-        </div>
-      </div>
-    );
+    return <PageSpinner label="Loading graph…" />;
   }
 
   if (state.status === 'error') {
