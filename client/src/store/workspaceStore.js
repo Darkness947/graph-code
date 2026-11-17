@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { buildGraphIndex } from '../features/graph/graphIndex.js';
-import { folderChain } from '../features/graph/visibility.js';
+import { folderChain, wrapperFolders } from '../features/graph/visibility.js';
 
 /** Workspace state (spec 8.8). `expandedFolders` is replaced, never mutated, so selectors see changes. */
 const initialState = () => ({
@@ -18,8 +18,14 @@ const initialState = () => ({
 export const useWorkspaceStore = create((set, get) => ({
   ...initialState(),
 
-  /** Loads a `Graph` from the API. Every top-level folder starts collapsed (spec 8.6 item 1). */
-  loadGraph: (graph) => set({ ...initialState(), graph: buildGraphIndex(graph) }),
+  /**
+   * Loads a `Graph` from the API. Every top-level folder starts collapsed (spec 8.6 item 1),
+   * except wrapper folders, which open in place (decision D-05).
+   */
+  loadGraph: (graph) => {
+    const index = buildGraphIndex(graph);
+    set({ ...initialState(), graph: index, expandedFolders: new Set(wrapperFolders(index)) });
+  },
 
   /** Expands a collapsed folder or collapses an expanded one. */
   toggleFolder: (path) => {
