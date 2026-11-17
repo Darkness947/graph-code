@@ -40,6 +40,29 @@ export function changedFolder(before, after) {
   return pick;
 }
 
+const VIEW_MARGIN = 32;
+
+/**
+ * How to keep a rectangle in view with the least movement: nothing when it is already on
+ * screen, pan to it at the same zoom when it fits, zoom out to fit it only when it is larger
+ * than the screen.
+ * @param {{ x: number, y: number, width: number, height: number }} rect canvas coordinates
+ * @param {{ x: number, y: number, zoom: number }} viewport
+ * @param {{ width: number, height: number }} screen
+ * @returns {null | 'center' | 'fit'}
+ */
+export function keepInViewMove(rect, { x, y, zoom }, screen) {
+  const m = VIEW_MARGIN;
+  const left = rect.x * zoom + x;
+  const top = rect.y * zoom + y;
+  const w = rect.width * zoom;
+  const h = rect.height * zoom;
+  if (left >= m && top >= m && left + w <= screen.width - m && top + h <= screen.height - m) {
+    return null;
+  }
+  return w <= screen.width - 2 * m && h <= screen.height - 2 * m ? 'center' : 'fit';
+}
+
 /** A node's rectangle in canvas coordinates (layout positions are relative to the parent). */
 function absoluteRect(nodes, id) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -89,24 +112,14 @@ function Canvas() {
     const rect = folder && absoluteRect(layout.nodes, folder.id);
     if (!rect) return;
     const { width, height } = flowStore.getState();
-    const { x, y, zoom } = flow.getViewport();
-    const margin = 32;
-    const left = rect.x * zoom + x;
-    const top = rect.y * zoom + y;
-    const inside =
-      left >= margin &&
-      top >= margin &&
-      left + rect.width * zoom <= width - margin &&
-      top + rect.height * zoom <= height - margin;
-    if (inside) return;
-    const fits =
-      rect.width * zoom <= width - 2 * margin && rect.height * zoom <= height - 2 * margin;
-    if (fits) {
+    const viewport = flow.getViewport();
+    const move = keepInViewMove(rect, viewport, { width, height });
+    if (move === 'center') {
       flow.setCenter(rect.x + rect.width / 2, rect.y + rect.height / 2, {
-        zoom,
+        zoom: viewport.zoom,
         duration: MOVE_MS,
       });
-    } else {
+    } else if (move === 'fit') {
       flow.fitBounds(rect, { padding: 0.08, duration: MOVE_MS });
     }
   }, [layout, expandedFolders, flow, flowStore]);

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAMPLE } from '../../../test/graphFixture.js';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
-import GraphCanvas, { changedFolder } from './GraphCanvas.jsx';
+import GraphCanvas, { changedFolder, keepInViewMove } from './GraphCanvas.jsx';
 import { LAYOUT_FAILED } from './GraphFallbackList.jsx';
 import * as layoutModule from './layout.js';
 
@@ -144,5 +144,23 @@ describe('changedFolder', () => {
 
   it('returns null when nothing changed', () => {
     expect(changedFolder(new Set(['src']), new Set(['src']))).toBeNull();
+  });
+});
+
+describe('keepInViewMove', () => {
+  const screen = { width: 1000, height: 600 };
+  const rect = { x: 100, y: 100, width: 200, height: 100 };
+
+  it('leaves the view alone when the folder is already on screen', () => {
+    expect(keepInViewMove(rect, { x: 0, y: 0, zoom: 1 }, screen)).toBeNull();
+  });
+
+  it('pans at the same zoom when the folder is off screen but fits', () => {
+    expect(keepInViewMove(rect, { x: -900, y: 0, zoom: 1 }, screen)).toBe('center');
+  });
+
+  it('zooms out only when the folder is larger than the screen', () => {
+    const big = { x: 0, y: 0, width: 2000, height: 300 };
+    expect(keepInViewMove(big, { x: 0, y: 0, zoom: 1 }, screen)).toBe('fit');
   });
 });

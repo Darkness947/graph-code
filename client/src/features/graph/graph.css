@@ -85,14 +85,13 @@
     background-color 120ms ease;
 }
 
+/* Importance is border weight and size only, never colour (spec 8.1). */
 .gc-file.tier-1 {
   border-width: 2px;
-  border-color: var(--text-secondary);
 }
 
 .gc-file.tier-2 {
   border-width: 3px;
-  border-color: var(--edge-active);
 }
 
 .react-flow__node:hover > .gc-file {

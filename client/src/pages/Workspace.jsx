@@ -34,6 +34,12 @@ function HeaderStrip({ repository, files, edges }) {
   );
 }
 
+/** Errors that send the user back to the dashboard, with the server's message as the text. */
+const KNOWN_ERRORS = {
+  NOT_FOUND: { icon: 'bi-question-circle', title: 'Repository not found' },
+  GRAPH_NOT_READY: { icon: 'bi-hourglass-split', title: 'Graph not ready yet' },
+};
+
 /** Graph workspace (spec 8.6). The canvas is drawn from the workspace store. */
 export default function Workspace() {
   const { id } = useParams();
@@ -77,14 +83,10 @@ export default function Workspace() {
   }
 
   if (state.status === 'error') {
-    const { code, message } = state.error;
-    if (code === 'NOT_FOUND' || code === 'GRAPH_NOT_READY') {
+    const known = KNOWN_ERRORS[state.error.code];
+    if (known) {
       return (
-        <MessagePanel
-          icon={code === 'NOT_FOUND' ? 'bi-question-circle' : 'bi-hourglass-split'}
-          title={code === 'NOT_FOUND' ? 'Repository not found' : 'Graph not ready yet'}
-          text={message}
-        >
+        <MessagePanel icon={known.icon} title={known.title} text={state.error.message}>
           <Link to="/dashboard" className="btn btn-primary">
             Back to dashboard
           </Link>
