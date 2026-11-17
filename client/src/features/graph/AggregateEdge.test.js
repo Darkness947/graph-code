@@ -19,6 +19,26 @@ describe('routedPath', () => {
     expect([labelX, labelY]).toEqual([25, 150]);
   });
 
+  it('stays finite when points coincide and puts the label on the chosen segment', () => {
+    const [d, labelX, labelY] = routedPath(
+      {
+        points: [
+          { x: 0, y: 0 },
+          { x: 0, y: 0 },
+          { x: 0, y: 100 },
+          { x: 40, y: 100 },
+        ],
+        label: 2,
+      },
+      0,
+      0,
+      40,
+      100,
+    );
+    expect(d).not.toContain('NaN');
+    expect([labelX, labelY]).toEqual([20, 100]);
+  });
+
   it('carries the inner points along when the ends move (during animation)', () => {
     const [d] = routedPath(route, 10, 0, 10, 200);
     expect(d).toContain(' 60,100');

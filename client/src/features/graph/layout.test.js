@@ -248,3 +248,23 @@ describe('wrapper folders (decision D-05)', () => {
     expect(node(result, 'd:src').data).toMatchObject({ expanded: false, fileCount: 4 });
   });
 });
+
+describe('edge ports inside a wrapped grid', () => {
+  // `big` has 9 children, so it is a grid with no Dagre routes; two of them are trays.
+  const files = [
+    'big/a/x.ts',
+    'big/b/y.ts',
+    ...Array.from({ length: 7 }, (_, i) => `big/f${i}.ts`),
+    ...Array.from({ length: 12 }, (_, i) => `o${i}.ts`),
+  ];
+  const graph = makeGraph(files, [['big/a/x.ts', 'big/b/y.ts']]);
+  const result = layoutGraph(buildGraphIndex(graph), new Set(['big', 'big/a', 'big/b']));
+
+  it('routes through the two ports alone, with the badge between them', () => {
+    const { points, label } = result.edges.find((e) => e.id === 'f:big/a/x.ts->f:big/b/y.ts').data
+      .route;
+    expect(points).toHaveLength(4);
+    expect(label).toBe(1);
+    expect(points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
+  });
+});

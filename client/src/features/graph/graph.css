@@ -310,26 +310,19 @@
 .gc-edge-badge {
   position: absolute;
   pointer-events: all;
-  /* Quiet at rest so many badges don't crowd the canvas; full strength when its edge is
-     hovered, or when the badge itself is pointed at or focused. */
-  opacity: 0.45;
-  transition: opacity 120ms ease;
 }
 
-.gc-edge-badge.is-active,
-.gc-edge-badge:hover,
-.gc-edge-badge:focus-within {
-  opacity: 1;
-}
-
+/* Quiet at rest so many badges don't crowd the canvas: no pill, just the number, still at
+   full text contrast (WCAG AA on the canvas). The pill appears when the badge's edge is
+   active (an end is hovered) or the badge itself is pointed at or focused. */
 .gc-edge-badge > button,
 .gc-edge-badge > span {
   display: inline-block;
   min-width: 22px;
   padding: 1px 7px;
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--bg-surface);
+  background: var(--bg-canvas);
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
@@ -338,6 +331,7 @@
   font-variant-numeric: tabular-nums;
   transition:
     border-color 120ms ease,
+    background-color 120ms ease,
     color 120ms ease;
 }
 
@@ -348,11 +342,14 @@
 .gc-edge-badge.is-active > button,
 .gc-edge-badge.is-active > span {
   border-color: var(--edge-active);
+  background: var(--bg-surface);
   color: var(--text-primary);
 }
 
-.gc-edge-badge > button:hover {
+.gc-edge-badge > button:hover,
+.gc-edge-badge > button:focus-visible {
   border-color: var(--accent-blue);
+  background: var(--bg-surface);
   color: var(--text-primary);
 }
 
@@ -446,7 +443,8 @@
   .gc-stack::after,
   .gc-file,
   .gc-edge-arrow,
-  .gc-edge-badge {
+  .gc-edge-badge > button,
+  .gc-edge-badge > span {
     transition: none;
   }
 }
