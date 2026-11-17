@@ -174,6 +174,9 @@ describe.skipIf(!hasTestDb)('graph and source endpoints (integration)', () => {
 
       expect(res.status).toBe(200);
       expect(Object.keys(res.body).sort()).toEqual(['edges', 'nodes', 'repository', 'unresolved']);
+      // The same Repository object GET /api/repos/:id returns.
+      const single = await request(app).get(`/api/repos/${repoId}`).set('Cookie', cookieA);
+      expect(res.body.repository).toEqual(single.body);
       expect(res.body.repository).toMatchObject({
         id: repoId,
         displayName: 'Darkness947/tailor',
@@ -309,6 +312,25 @@ describe.skipIf(!hasTestDb)('graph and source endpoints (integration)', () => {
       const res = await getSource(cookieA, repoId, ids.utils);
       expect(res.status).toBe(502);
       expect(res.body.error.code).toBe('GITHUB_UNAVAILABLE');
+    });
+
+    it('returns 401 and forgets the token when GitHub rejects it', async () => {
+      // A separate user: the rejection deletes every session of that user.
+      const cookie = await signIn(app, oauth, 303);
+      const userId = await userIdOf(303);
+      const repoId = await insertRepo(userId, 'tailor');
+      const ids = await seedGraph(repoId);
+      const err = new AppError('UNAUTHENTICATED', 'Please sign in to continue.');
+      err.githubReason = 'TOKEN_REJECTED';
+      github.getFileSource.mockRejectedValue(err);
+
+      const res = await getSource(cookie, repoId, ids.utils);
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('UNAUTHENTICATED');
+      const { rows } = await pool.query('SELECT access_token_enc FROM users WHERE id = $1', [
+        userId,
+      ]);
+      expect(rows[0].access_token_enc).toBeNull();
     });
 
     it('returns 409 GRAPH_NOT_READY before ingestion succeeded', async () => {
