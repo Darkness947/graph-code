@@ -99,7 +99,17 @@ function Canvas() {
     }
   }, [graph, expandedFolders]);
 
-  const { nodes, moving } = useAnimatedNodes(layout.nodes);
+  const { nodes, moving, moveNode } = useAnimatedNodes(layout.nodes);
+
+  // Dragging: React Flow reports each pointer move as a position change; the node moves in the
+  // drawn nodes and its edges follow. Other changes (measured sizes) are ignored, because the
+  // layout owns sizes.
+  const onNodesChange = useCallback(
+    (changes) => {
+      for (const c of changes) if (c.type === 'position' && c.position) moveNode(c.id, c.position);
+    },
+    [moveNode],
+  );
 
   // Keep the folder that was just expanded or collapsed in view (item 6), whoever changed it.
   // The view moves only as far as needed, and zooms out only when the folder is larger than
@@ -156,7 +166,9 @@ function Canvas() {
         minZoom={0.05}
         maxZoom={2}
         onlyRenderVisibleElements
-        nodesDraggable={false}
+        onNodesChange={onNodesChange}
+        nodesDraggable
+        nodeDragThreshold={4}
         nodesConnectable={false}
         elementsSelectable={false}
         zoomOnDoubleClick={false}

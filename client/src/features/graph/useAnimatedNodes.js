@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export const MOVE_MS = 300;
 
@@ -36,7 +36,7 @@ function between(before, target, k) {
  * nodes. Nodes that are new, or that changed parent, appear at their place straight away.
  * The first layout is shown without motion, and so is every layout under reduced motion.
  * @param {object[]} target React Flow nodes from the layout
- * @returns {{ nodes: object[], moving: boolean }}
+ * @returns {{ nodes: object[], moving: boolean, moveNode: (id: string, position: { x: number, y: number }) => void }}
  */
 export function useAnimatedNodes(target) {
   const [anim, setAnim] = useState({ target, from: null, nodes: target, moving: false });
@@ -73,5 +73,13 @@ export function useAnimatedNodes(target) {
     return () => cancelAnimationFrame(raf);
   }, [moving, from, target]);
 
-  return { nodes: anim.nodes, moving: anim.moving };
+  // A node the user drags is moved in the drawn nodes themselves, so its edges follow it and
+  // the next layout animates from where it was left. Ignored while a layout is moving.
+  const moveNode = useCallback((id, position) => {
+    setAnim((a) =>
+      a.moving ? a : { ...a, nodes: a.nodes.map((n) => (n.id === id ? { ...n, position } : n)) },
+    );
+  }, []);
+
+  return { nodes: anim.nodes, moving: anim.moving, moveNode };
 }

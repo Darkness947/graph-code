@@ -43,6 +43,8 @@ describe('layoutGraph', () => {
     const src = node(result, 'd:src');
     const kids = result.nodes.filter((n) => n.parentId === 'd:src');
     expect(kids.map((n) => n.id).sort()).toEqual(['d:src/lib', 'f:src/main.ts']);
+    // Children can be dragged only within their folder's tray.
+    expect(kids.every((n) => n.extent === 'parent')).toBe(true);
     for (const kid of kids) {
       expect(kid.position.x).toBeGreaterThanOrEqual(FOLDER_PAD);
       expect(kid.position.y).toBeGreaterThanOrEqual(FOLDER_HEADER);

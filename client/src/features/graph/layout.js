@@ -136,7 +136,8 @@ export function layoutGraph(index, expandedFolders) {
       id: v.id,
       type: v.kind,
       position: position.get(v.id),
-      ...(v.parentId ? { parentId: v.parentId } : {}),
+      // A node inside a folder can be dragged only within the folder's tray.
+      ...(v.parentId ? { parentId: v.parentId, extent: 'parent' } : {}),
       ...size.get(v.id),
       data,
     };

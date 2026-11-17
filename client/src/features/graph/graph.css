@@ -36,14 +36,18 @@
   color: var(--text-secondary);
 }
 
-/* Nodes are display-only in this task: no default chrome from React Flow. The focus ring
-   itself comes from the global :focus-visible rule; only its offset is set here. */
+/* No default chrome from React Flow. Nodes can be dragged (grab cursor); the focus ring itself
+   comes from the global :focus-visible rule, only its offset is set here. */
 .gc-canvas .react-flow__node {
   border: 0;
   padding: 0;
   background: none;
   box-shadow: none;
-  cursor: default;
+  cursor: grab;
+}
+
+.gc-canvas .react-flow__node.dragging {
+  cursor: grabbing;
 }
 
 .gc-canvas .react-flow__node:focus-visible {
@@ -140,7 +144,6 @@
   position: relative;
   width: 100%;
   height: 100%;
-  cursor: pointer;
 }
 
 /* Two sheets peeking out behind the folder say "there is more inside". */
