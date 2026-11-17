@@ -9,7 +9,11 @@ function nodeNotFound() {
   return new AppError('NOT_FOUND', 'File not found.');
 }
 
-/** `src/lib/utils.ts` → `src/lib`; a top-level item → `""` (the root, spec 6.2). */
+/**
+ * `src/lib/utils.ts` → `src/lib`; a top-level item → `""` (the root, spec 6.2).
+ * @param {string} path
+ * @returns {string}
+ */
 export function parentPathOf(path) {
   const slash = path.lastIndexOf('/');
   return slash === -1 ? '' : path.slice(0, slash);
@@ -18,6 +22,7 @@ export function parentPathOf(path) {
 /**
  * Maps a node row to the Graph node shape (spec 6.2). Folders carry only `metrics.fileCount`.
  * @param {Record<string, any>} row
+ * @returns {object} a Graph node
  */
 export function mapNode(row) {
   const base = {
