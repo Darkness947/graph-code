@@ -1,0 +1,441 @@
+/*
+ * Graph canvas (spec 8.6). Tokens only (spec 8.1). Structural importance is shown by size and
+ * border weight, never by colour; red and gold stay reserved for AI risk.
+ */
+
+.gc-canvas {
+  --gc-shadow:
+    0 1px 0 rgba(var(--text-primary-rgb), 0.03) inset,
+    0 6px 16px -6px rgba(var(--bg-canvas-rgb), 0.9);
+  --gc-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* React Flow theme */
+  --xy-background-color: var(--bg-canvas);
+  --xy-background-pattern-color: rgba(var(--text-primary-rgb), 0.1);
+  --xy-edge-stroke: var(--edge-rest);
+  --xy-controls-button-background-color: var(--bg-surface);
+  --xy-controls-button-background-color-hover: var(--bg-surface-hover);
+  --xy-controls-button-color: var(--text-primary);
+  --xy-controls-button-color-hover: var(--text-primary);
+  --xy-controls-button-border-color: var(--border-default);
+  --xy-controls-box-shadow: var(--gc-shadow);
+  --xy-minimap-background-color: var(--bg-surface);
+  --xy-minimap-mask-background-color: rgba(var(--bg-canvas-rgb), 0.72);
+  --xy-minimap-mask-stroke-color: var(--border-default);
+  --xy-minimap-mask-stroke-width: 1;
+  --xy-attribution-background-color: transparent;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-sans);
+  background: var(--bg-canvas);
+}
+
+.gc-canvas .react-flow__attribution a {
+  color: var(--text-secondary);
+}
+
+/* Nodes are display-only in this task: no default chrome from React Flow. The focus ring
+   itself comes from the global :focus-visible rule; only its offset is set here. */
+.gc-canvas .react-flow__node {
+  border: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+.gc-canvas .react-flow__node:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Newly revealed nodes fade in while an expand or collapse is moving the layout (item 6). */
+.gc-canvas.is-moving .react-flow__node {
+  animation: gc-appear 260ms var(--gc-ease) both;
+}
+
+@keyframes gc-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+.gc-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---- Files (item 7) ---------------------------------------------------- */
+
+.gc-file {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: var(--node-default);
+  box-shadow: var(--gc-shadow);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+/* Importance is border weight and size only, never colour (spec 8.1). */
+.gc-file.tier-1 {
+  border-width: 2px;
+}
+
+.gc-file.tier-2 {
+  border-width: 3px;
+}
+
+.react-flow__node:hover > .gc-file {
+  border-color: var(--edge-active);
+  background: var(--bg-surface-hover);
+}
+
+.gc-file-title {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gc-file-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.tier-2 .gc-file-name {
+  font-size: 13px;
+}
+
+.gc-file-hint {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.gc-file-counts {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-file-counts b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ---- Collapsed folders: a stack of sheets (item 1) ----------------------- */
+
+.gc-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* Two sheets peeking out behind the folder say "there is more inside". */
+.gc-stack::before,
+.gc-stack::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  content: '';
+  transition: transform 160ms var(--gc-ease);
+}
+
+.gc-stack::before {
+  transform: translate(8px, -8px);
+  opacity: 0.45;
+}
+
+.gc-stack::after {
+  transform: translate(4px, -4px);
+  opacity: 0.8;
+}
+
+.react-flow__node:hover > .gc-stack::before {
+  transform: translate(10px, -10px);
+}
+
+.react-flow__node:hover > .gc-stack::after {
+  transform: translate(5px, -5px);
+}
+
+.gc-stack-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 0 8px 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  box-shadow: var(--gc-shadow);
+  transition: border-color 120ms ease;
+}
+
+.react-flow__node:hover > .gc-stack .gc-stack-body {
+  border-color: var(--edge-active);
+}
+
+.gc-stack-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gc-folder-icon {
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.gc-folder-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gc-folder-count {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-chevron {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.gc-chevron:hover {
+  border-color: var(--border-default);
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.gc-chevron:focus-visible {
+  outline-offset: 1px;
+}
+
+/* ---- Expanded folders: a tray around the children (item 5) -------------- */
+
+.gc-tray {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: rgba(var(--bg-surface-rgb), 0.55);
+}
+
+/* Nested trays alternate tone so each level reads as its own region. */
+.gc-tray.depth-1 {
+  background: rgba(var(--bg-canvas-rgb), 0.6);
+}
+
+.gc-tray-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 8px 0 14px;
+}
+
+.gc-tray-header .gc-folder-name {
+  flex: 0 1 auto;
+}
+
+.gc-tray-header .gc-folder-count {
+  flex: 1 1 auto;
+}
+
+/* ---- Edges (items 3 and 4) --------------------------------------------- */
+
+.gc-canvas .react-flow__edge-path.gc-edge {
+  stroke: var(--edge-rest);
+  transition: stroke 120ms ease;
+}
+
+.gc-canvas .react-flow__edge-path.gc-edge.is-active {
+  stroke: var(--edge-active);
+}
+
+.gc-edge-arrow {
+  fill: var(--edge-rest);
+  transition: fill 120ms ease;
+}
+
+.gc-edge-arrow.is-active {
+  fill: var(--edge-active);
+}
+
+.gc-canvas .react-flow__edge.has-expand {
+  cursor: pointer;
+}
+
+.gc-edge-badge {
+  position: absolute;
+  pointer-events: all;
+}
+
+.gc-edge-badge > button,
+.gc-edge-badge > span {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 7px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.gc-edge-badge > button {
+  cursor: pointer;
+}
+
+.gc-edge-badge.is-active > button,
+.gc-edge-badge.is-active > span {
+  border-color: var(--edge-active);
+  color: var(--text-primary);
+}
+
+.gc-edge-badge > button:hover {
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+
+/* ---- Minimap and controls ---------------------------------------------- */
+
+.gc-canvas .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+}
+
+.gc-canvas .react-flow__minimap-node.gc-mm-file {
+  fill: var(--node-default);
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+}
+
+.gc-canvas .react-flow__minimap-node.gc-mm-folder {
+  fill: var(--bg-surface-hover);
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+}
+
+.gc-canvas .react-flow__minimap-node.gc-mm-tray {
+  fill: var(--bg-surface);
+  stroke: var(--border-default);
+  stroke-width: 2;
+}
+
+.gc-canvas .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+}
+
+.gc-canvas .react-flow__controls-button:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ---- Fallback list (item 11) ------------------------------------------- */
+
+.gc-fallback {
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+}
+
+.gc-fallback-message {
+  margin-bottom: 16px;
+  color: var(--text-primary);
+  font-size: var(--font-size-panel-title);
+}
+
+.gc-fallback-message .bi {
+  margin-right: 6px;
+  color: var(--text-secondary);
+}
+
+.gc-fallback-table {
+  width: 100%;
+  max-width: 960px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.gc-fallback-table th {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: left;
+}
+
+.gc-fallback-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-fallback-path {
+  font-family: var(--font-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gc-canvas.is-moving .react-flow__node {
+    animation: none;
+  }
+
+  .gc-stack::before,
+  .gc-stack::after,
+  .gc-file,
+  .gc-edge-arrow {
+    transition: none;
+  }
+}

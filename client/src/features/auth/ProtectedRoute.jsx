@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
+import PageSpinner from '../../components/PageSpinner.jsx';
 import { showToast } from '../../store/toastStore.js';
 import { useSession } from './useSession.js';
 
@@ -15,15 +16,7 @@ export default function ProtectedRoute() {
     else if (status === 'anonymous' && !wasSignedIn.current) showToast('Please sign in');
   }, [status]);
 
-  if (isLoading) {
-    return (
-      <div className="centered-fill">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading…</span>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <PageSpinner />;
   if (status === 'anonymous') return <Navigate to="/" replace />;
   if (status === 'error') return <Navigate to="/error" replace />;
   return <Outlet />;

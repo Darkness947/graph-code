@@ -723,3 +723,66 @@ h2 {
 .modal-inline-error {
   margin: 12px 0 0;
 }
+
+/* Graph workspace (spec 8.6) */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--topbar-height));
+  min-height: 0;
+}
+
+.ws-strip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 20px;
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ws-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ws-crumbs a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.ws-crumbs a:hover {
+  color: var(--text-primary);
+}
+
+.ws-crumb-sep {
+  color: var(--border-default);
+}
+
+.ws-repo {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+}
+
+.ws-meta {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-back {
+  margin-left: auto;
+}
+
+.ws-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}

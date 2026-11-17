@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
 const globalCss = readFileSync(new URL('./global.css', import.meta.url), 'utf8');
+const graphCss = readFileSync(new URL('../features/graph/graph.css', import.meta.url), 'utf8');
 
 // Spec 8.1, in table order.
 const TOKENS = {
@@ -30,7 +31,7 @@ const TOKENS = {
 };
 
 // Bootstrap needs some colours as RGB triplets; each must equal its hex token.
-const TRIPLETS = ['--bg-canvas', '--text-primary', '--accent-blue'];
+const TRIPLETS = ['--bg-canvas', '--bg-surface', '--text-primary', '--accent-blue'];
 const toTriplet = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ');
 
 describe('design tokens (spec 8.1)', () => {
@@ -66,5 +67,11 @@ describe('Bootstrap overrides and colour rules', () => {
 
   it('never uses the reserved AI risk colours in the shell', () => {
     expect(globalCss).not.toMatch(/--risk-(high|medium)/);
+  });
+
+  it('keeps the graph canvas on tokens, with no risk colours (structure is not risk)', () => {
+    expect(graphCss).not.toMatch(/-rgb:\s*\d/);
+    expect(graphCss).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(graphCss).not.toMatch(/--risk-|--danger/);
   });
 });

@@ -1,5 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../api/client.js';
 import { mockApi, renderApp, USER } from '../../test/helpers.jsx';
 
 vi.mock('../api/client.js', async (importOriginal) => ({
@@ -166,10 +167,16 @@ describe('Not found (spec 8.7)', () => {
 
 describe('Routes (spec 8.2)', () => {
   it('serves the graph workspace at /repos/:id when signed in', async () => {
-    mockApi({ me: USER });
+    mockApi({
+      me: USER,
+      routes: {
+        '/repos/42/graph': () =>
+          Promise.reject(new ApiError(409, { code: 'GRAPH_NOT_READY', message: 'Not ready.' })),
+      },
+    });
     renderApp('/repos/42');
 
-    expect(await screen.findByRole('heading', { name: 'Graph workspace' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Graph not ready yet' })).toBeInTheDocument();
   });
 
   it('includes the desktop-screens notice on every page', () => {

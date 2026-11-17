@@ -1,7 +1,9 @@
+import { lazy, Suspense } from 'react';
 import { Outlet, Route, Routes } from 'react-router-dom';
 import AppToast from './components/AppToast.jsx';
 import Footer from './components/Footer.jsx';
 import NavBar from './components/NavBar.jsx';
+import PageSpinner from './components/PageSpinner.jsx';
 import ViewportNotice from './components/ViewportNotice.jsx';
 import ProtectedRoute from './features/auth/ProtectedRoute.jsx';
 import About from './pages/About.jsx';
@@ -10,7 +12,9 @@ import ErrorPage from './pages/ErrorPage.jsx';
 import Landing from './pages/Landing.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Privacy from './pages/Privacy.jsx';
-import Workspace from './pages/Workspace.jsx';
+
+// The workspace carries React Flow and Dagre; load it only when a graph is opened.
+const Workspace = lazy(() => import('./pages/Workspace.jsx'));
 
 /** The frame every page shares: top bar, desktop notice, toast and the page itself. */
 function Layout() {
@@ -49,7 +53,14 @@ export default function AppRoutes() {
         <Route path="/error" element={<ErrorPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/repos/:id" element={<Workspace />} />
+          <Route
+            path="/repos/:id"
+            element={
+              <Suspense fallback={<PageSpinner />}>
+                <Workspace />
+              </Suspense>
+            }
+          />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>
