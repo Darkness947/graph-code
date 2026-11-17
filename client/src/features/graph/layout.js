@@ -1,0 +1,251 @@
+import dagre from '@dagrejs/dagre';
+import { aggregateEdges } from './aggregation.js';
+import { centralityThresholds, centralityTier } from './centrality.js';
+import { buildVisibleAncestorMap, computeVisibleNodes } from './visibility.js';
+
+/**
+ * Lays out the visible part of the graph for React Flow (spec 8.6 items 5 and 10).
+ *
+ * Layout is bottom-up. Each expanded folder lays out its direct children first, then takes
+ * the size of what it holds (at least 180 × 80). Inside a container:
+ * - children joined by edges are placed by Dagre, top to bottom, importer above imported;
+ * - children with no edge inside the container are packed in a grid below them;
+ * - a folder with more than 8 direct children is laid out as one wrapped grid.
+ * The top level is always laid out the same way, with Dagre for everything connected.
+ * Only visible nodes are ever laid out.
+ */
+
+/** File size per centrality tier: ordinary, top 10%, top 3%. */
+export const FILE_SIZES = [
+  { width: 216, height: 66 },
+  { width: 236, height: 72 },
+  { width: 256, height: 78 },
+];
+export const FOLDER_SIZE = { width: 216, height: 66 };
+export const FOLDER_MIN = { width: 180, height: 80 };
+export const FOLDER_HEADER = 44;
+export const FOLDER_PAD = 24;
+export const WRAP_AFTER = 8;
+
+const GAP = 24;
+const SPACING = {
+  top: { nodesep: 56, ranksep: 96 },
+  folder: { nodesep: 32, ranksep: 64 },
+};
+
+/**
+ * @param {{ nodesById: Map<string, any>, childrenByPath: Map<string, string[]>, edges: object[] }} index
+ * @param {Set<string>} expandedFolders folder paths
+ * @returns {{ nodes: object[], edges: object[] }} React Flow nodes (parents first; child positions
+ *   relative to their parent) and edges
+ */
+export function layoutGraph(index, expandedFolders) {
+  const visible = computeVisibleNodes(index, expandedFolders);
+  const ancestors = buildVisibleAncestorMap(index, expandedFolders);
+  const visibleEdges = aggregateEdges(index.edges, ancestors, index.nodesById);
+  const thresholds = centralityThresholds([...index.nodesById.values()]);
+
+  const visById = new Map(visible.map((v) => [v.id, v]));
+  const kidsOf = new Map([[null, []]]);
+  for (const v of visible) {
+    if (v.kind === 'folder' && v.expanded) kidsOf.set(v.id, []);
+    kidsOf.get(v.parentId).push(v.id);
+  }
+
+  const size = new Map();
+  const position = new Map();
+
+  for (const v of visible) {
+    if (v.kind === 'file') {
+      const tier = centralityTier(index.nodesById.get(v.id).metrics?.fanIn ?? 0, thresholds);
+      size.set(v.id, FILE_SIZES[tier]);
+    } else if (!v.expanded) {
+      size.set(v.id, FOLDER_SIZE);
+    }
+  }
+
+  /** The direct child of `container` that holds `id`, or null when `id` is outside it. */
+  const lift = (id, container) => {
+    let cur = id;
+    while (cur != null) {
+      const parent = visById.get(cur).parentId;
+      if (parent === container) return cur;
+      cur = parent;
+    }
+    return null;
+  };
+
+  /** Lays out a container's children; returns the size of the content. */
+  const layoutContainer = (containerId) => {
+    const kids = kidsOf.get(containerId);
+    for (const id of kids) {
+      if (!size.has(id)) {
+        const content = layoutContainer(id);
+        size.set(id, {
+          width: Math.max(FOLDER_MIN.width, content.width + FOLDER_PAD * 2),
+          height: Math.max(FOLDER_MIN.height, content.height + FOLDER_HEADER + FOLDER_PAD),
+        });
+      }
+    }
+
+    let placed;
+    if (containerId !== null && kids.length > WRAP_AFTER) {
+      placed = grid(kids, size, Math.ceil(Math.sqrt(kids.length * 1.5)));
+    } else {
+      const links = new Set();
+      for (const edge of visibleEdges) {
+        const s = lift(edge.source, containerId);
+        const t = lift(edge.target, containerId);
+        if (s && t && s !== t) links.add(`${s}\n${t}`);
+      }
+      placed = connectedThenGrid(kids, links, size, containerId === null ? 'top' : 'folder');
+    }
+
+    const offset = containerId === null ? { x: 0, y: 0 } : { x: FOLDER_PAD, y: FOLDER_HEADER };
+    for (const [id, p] of placed.positions)
+      position.set(id, { x: p.x + offset.x, y: p.y + offset.y });
+    return placed;
+  };
+
+  layoutContainer(null);
+
+  const nodes = visible.map((v) => {
+    const node = index.nodesById.get(v.id);
+    const { width, height } = size.get(v.id);
+    const data =
+      v.kind === 'file'
+        ? {
+            name: node.name,
+            path: node.path,
+            hint: node.parentPath,
+            fanIn: node.metrics?.fanIn ?? 0,
+            fanOut: node.metrics?.fanOut ?? 0,
+            tier: centralityTier(node.metrics?.fanIn ?? 0, thresholds),
+          }
+        : {
+            name: node.name,
+            path: node.path,
+            hint: node.parentPath,
+            fileCount: node.metrics?.fileCount ?? 0,
+            expanded: v.expanded,
+            depth: v.depth,
+          };
+    return {
+      id: v.id,
+      type: v.kind,
+      position: position.get(v.id),
+      ...(v.parentId ? { parentId: v.parentId } : {}),
+      width,
+      height,
+      data,
+    };
+  });
+
+  const edges = visibleEdges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    type: 'aggregate',
+    zIndex: Math.max(visById.get(e.source).depth, visById.get(e.target).depth),
+    data: { count: e.count, aggregated: e.aggregated },
+  }));
+
+  return { nodes, edges };
+}
+
+/**
+ * Children with at least one link go through Dagre; the rest are packed in a grid centred
+ * below them.
+ */
+function connectedThenGrid(ids, links, size, level) {
+  const linked = new Set();
+  for (const key of links) for (const id of key.split('\n')) linked.add(id);
+  const connected = ids.filter((id) => linked.has(id));
+  const loose = ids.filter((id) => !linked.has(id));
+
+  const top = connected.length ? runDagre(connected, links, size, SPACING[level]) : empty();
+  const widest = Math.max(...loose.map((id) => size.get(id).width), 0) + GAP;
+  const fitCols = Math.floor((top.width + GAP) / Math.max(widest, 1));
+  const cols = Math.min(loose.length, Math.max(level === 'top' ? 5 : 4, fitCols));
+  const bottom = loose.length ? grid(loose, size, cols) : empty();
+
+  const width = Math.max(top.width, bottom.width);
+  const gapY = top.height && bottom.height ? SPACING[level].ranksep : 0;
+  const positions = new Map();
+  const shift = (from, dx, dy) => {
+    for (const [id, p] of from.positions) positions.set(id, { x: p.x + dx, y: p.y + dy });
+  };
+  shift(top, (width - top.width) / 2, 0);
+  shift(bottom, (width - bottom.width) / 2, top.height + gapY);
+  return { positions, width, height: top.height + gapY + bottom.height };
+}
+
+function runDagre(ids, links, size, spacing) {
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: 'TB', ...spacing, marginx: 0, marginy: 0 });
+  g.setDefaultEdgeLabel(() => ({}));
+  for (const id of ids) g.setNode(id, { ...size.get(id) });
+  for (const key of links) {
+    const [s, t] = key.split('\n');
+    g.setEdge(s, t);
+  }
+  dagre.layout(g);
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const raw = new Map();
+  for (const id of ids) {
+    const n = g.node(id);
+    if (!Number.isFinite(n?.x) || !Number.isFinite(n?.y)) {
+      throw new Error(`Dagre returned no position for node ${id}`);
+    }
+    const x = n.x - n.width / 2;
+    const y = n.y - n.height / 2;
+    raw.set(id, { x, y });
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + n.width);
+    maxY = Math.max(maxY, y + n.height);
+  }
+  const positions = new Map();
+  for (const [id, p] of raw) positions.set(id, { x: p.x - minX, y: p.y - minY });
+  return { positions, width: maxX - minX, height: maxY - minY };
+}
+
+/** A grid in the given order: each column as wide as its widest item, each row as tall as its tallest. */
+function grid(ids, size, columns) {
+  const cols = Math.max(1, Math.min(columns, ids.length));
+  const colW = new Array(cols).fill(0);
+  const rowH = new Array(Math.ceil(ids.length / cols)).fill(0);
+  ids.forEach((id, i) => {
+    const s = size.get(id);
+    colW[i % cols] = Math.max(colW[i % cols], s.width);
+    rowH[Math.floor(i / cols)] = Math.max(rowH[Math.floor(i / cols)], s.height);
+  });
+  const colX = prefix(colW);
+  const rowY = prefix(rowH);
+  const positions = new Map();
+  ids.forEach((id, i) => {
+    const c = i % cols;
+    const s = size.get(id);
+    positions.set(id, { x: colX[c] + (colW[c] - s.width) / 2, y: rowY[Math.floor(i / cols)] });
+  });
+  const total = (list) => list.reduce((a, b) => a + b, 0) + GAP * (list.length - 1);
+  return { positions, width: total(colW), height: total(rowH) };
+}
+
+function prefix(list) {
+  const out = [];
+  let at = 0;
+  for (const v of list) {
+    out.push(at);
+    at += v + GAP;
+  }
+  return out;
+}
+
+function empty() {
+  return { positions: new Map(), width: 0, height: 0 };
+}
