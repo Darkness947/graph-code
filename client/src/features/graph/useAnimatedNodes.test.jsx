@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAnimatedNodes } from './useAnimatedNodes.js';
 
@@ -19,7 +19,7 @@ describe('useAnimatedNodes', () => {
     motion(false);
     const first = [node('a', 0)];
     const { result } = renderHook(({ t }) => useAnimatedNodes(t), { initialProps: { t: first } });
-    expect(result.current).toEqual({ nodes: first, moving: false });
+    expect(result.current).toMatchObject({ nodes: first, moving: false });
   });
 
   it('moves existing nodes from where they were to the new layout', async () => {
@@ -46,7 +46,7 @@ describe('useAnimatedNodes', () => {
     });
     const next = [node('a', 300)];
     rerender({ t: next });
-    expect(result.current).toEqual({ nodes: next, moving: false });
+    expect(result.current).toMatchObject({ nodes: next, moving: false });
   });
 
   it('does not slide a node that moved into a different folder', () => {
@@ -57,5 +57,24 @@ describe('useAnimatedNodes', () => {
     const next = [node('p', 0), node('a', 40, { parentId: 'p' })];
     rerender({ t: next });
     expect(result.current.nodes[1]).toBe(next[1]);
+  });
+
+  it('moves a dragged node in place, leaving the others untouched', () => {
+    motion(false);
+    const start = [node('a', 0), node('b', 300)];
+    const { result } = renderHook(({ t }) => useAnimatedNodes(t), { initialProps: { t: start } });
+    act(() => result.current.moveNode('a', { x: 40, y: 25 }));
+    expect(result.current.nodes[0].position).toEqual({ x: 40, y: 25 });
+    expect(result.current.nodes[1]).toBe(start[1]);
+  });
+
+  it('animates the next layout from where a node was dragged', () => {
+    motion(false);
+    const { result, rerender } = renderHook(({ t }) => useAnimatedNodes(t), {
+      initialProps: { t: [node('a', 0)] },
+    });
+    act(() => result.current.moveNode('a', { x: 500, y: 0 }));
+    rerender({ t: [node('a', 100)] });
+    expect(result.current.nodes[0].position.x).toBe(500);
   });
 });

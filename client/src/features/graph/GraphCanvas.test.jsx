@@ -104,6 +104,16 @@ describe('GraphCanvas', () => {
     expect(store().hoveredNodeId).toBeNull();
   });
 
+  it('lets nodes be dragged, but not from a chevron or a badge', async () => {
+    await renderCanvas();
+    expect(nodeEl('f:index.ts')).toHaveClass('draggable');
+    expect(nodeEl('d:src')).toHaveClass('draggable');
+    expect(screen.getByRole('button', { name: 'Expand folder src' })).toHaveClass('nodrag');
+    expect(
+      screen.getByRole('button', { name: '2 imports. Expand folder src' }).parentElement,
+    ).toHaveClass('nodrag');
+  });
+
   it('shows zoom controls and a minimap', async () => {
     await renderCanvas();
     expect(document.querySelector('.react-flow__controls')).toBeInTheDocument();
