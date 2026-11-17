@@ -126,8 +126,15 @@ describe('layoutGraph', () => {
       source: 'd:app',
       target: 'd:src',
       type: 'aggregate',
-      data: { count: 2, aggregated: true },
+      data: { count: 2, aggregated: true, expandPath: 'src' },
     });
+  });
+
+  it('expands nothing from an edge whose target is a file', () => {
+    const result = layout(SAMPLE, ['src', 'src/lib']);
+    // app (collapsed) -> src/lib/utils.ts: aggregated because of the folder, but the target is a file.
+    const edge = result.edges.find((e) => e.id === 'd:app->f:src/lib/utils.ts');
+    expect(edge.data).toMatchObject({ aggregated: true, expandPath: null });
   });
 
   it('copes with an empty graph', () => {

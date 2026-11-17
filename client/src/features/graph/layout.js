@@ -141,13 +141,19 @@ export function layoutGraph(index, expandedFolders) {
     };
   });
 
+  /** The folder a click on an aggregated edge expands: its target, when that is a folder (item 3). */
+  const expandPath = (e) => {
+    const target = index.nodesById.get(e.target);
+    return e.aggregated && target.type === 'folder' ? target.path : null;
+  };
   const edges = visibleEdges.map((e) => ({
     id: e.id,
+    ...(expandPath(e) ? { className: 'has-expand' } : {}),
     source: e.source,
     target: e.target,
     type: 'aggregate',
     zIndex: Math.max(visById.get(e.source).depth, visById.get(e.target).depth),
-    data: { count: e.count, aggregated: e.aggregated },
+    data: { count: e.count, aggregated: e.aggregated, expandPath: expandPath(e) },
   }));
 
   return { nodes, edges };

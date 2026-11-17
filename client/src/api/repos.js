@@ -19,3 +19,10 @@ export const listGithubRepos = (page = 1) => request(`/github/repos?page=${page}
  * @returns {Promise<null>}
  */
 export const deleteRepo = (id) => request(`/repos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/**
+ * The repository's dependency graph. `409 GRAPH_NOT_READY` before ingestion succeeded.
+ * @param {string} id
+ * @returns {Promise<{ repository: object, nodes: object[], edges: object[], unresolved: object }>}
+ */
+export const getGraph = (id) => request(`/repos/${encodeURIComponent(id)}/graph`);
