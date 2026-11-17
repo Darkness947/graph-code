@@ -15,6 +15,10 @@ import { createGithubClient } from './services/github/githubClient.js';
 import { createRepositoryService } from './services/repos/repositoryService.js';
 import { createJobRepository } from './services/ingestion/jobRepository.js';
 import { createJobsRouter } from './routes/jobs.js';
+import { createGraphRouter } from './routes/graph.js';
+import { createGraphRepository } from './services/graph/graphRepository.js';
+import { createGraphQueryService } from './services/graph/graphQueryService.js';
+import { requireUserToken } from './services/auth/tokenCrypto.js';
 
 /**
  * Builds the Express app (exported for Supertest). Routes are added by later tasks.
@@ -51,9 +55,16 @@ export function createApp(config, options = {}) {
     const enqueue = options.enqueue ?? (() => {});
     const addRepoLimit = options.addRepoLimit ?? ADD_REPO_LIMIT;
     api.use('/github', requireAuth, createGithubRouter({ pool, crypto, github, repos }));
+    const graph = createGraphQueryService({
+      repos,
+      graphs: createGraphRepository(pool),
+      github,
+      getToken: (userId) => requireUserToken(pool, crypto, userId),
+    });
     api.use(
       '/repos',
       requireAuth,
+      createGraphRouter({ graph }),
       createReposRouter({ pool, crypto, github, enqueue, addRepoLimit, repos }),
     );
     api.use('/jobs', requireAuth, createJobsRouter({ jobs }));
