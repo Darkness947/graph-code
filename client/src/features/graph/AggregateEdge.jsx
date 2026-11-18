@@ -81,7 +81,7 @@ function AggregateEdge({
   const [path, labelX, labelY] = data.route
     ? routedPath(data.route, sourceX, sourceY, targetX, targetY)
     : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
-  const state = `${active ? ' is-active' : ''}${data.detail ? ' is-detail' : ''}`;
+  const state = `${active ? ' is-active' : ''}${data.detail ? ' is-detail' : ''}${data.dim ? ' is-dim' : ''}`;
   const imports = countOf(data.count, 'import', 'imports');
 
   return (

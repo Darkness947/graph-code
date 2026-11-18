@@ -103,4 +103,46 @@ describe('workspaceStore wrapper folders (decision D-05)', () => {
       parentId: 'd:client',
     });
   });
+
+  describe('focus, search and sidebar', () => {
+    beforeEach(() => state().loadGraph(SAMPLE));
+
+    it('selects a file, enters focus mode with its neighbourhood and opens its folders', () => {
+      state().selectFile('f:src/lib/deep/math.ts');
+      expect(state().selectedNodeId).toBe('f:src/lib/deep/math.ts');
+      expect(state().focus.active).toBe(true);
+      expect(state().focus.nodeIds[0]).toBe('f:src/lib/deep/math.ts');
+      expect(state().focus.nodeIds).toContain('f:src/lib/utils.ts');
+      expect(state().expandedFolders.has('src/lib/deep')).toBe(true);
+      expect(state().expandedFolders.has('src')).toBe(true);
+    });
+
+    it('ignores folders and unknown ids', () => {
+      state().selectFile('d:src');
+      state().selectFile('nope');
+      expect(state().selectedNodeId).toBeNull();
+      expect(state().focus.active).toBe(false);
+    });
+
+    it('clears focus and selection', () => {
+      state().selectFile('f:index.ts');
+      state().clearFocus();
+      expect(state().selectedNodeId).toBeNull();
+      expect(state().focus).toEqual({ active: false, nodeIds: [] });
+    });
+
+    it('keeps search results in step with the query and clears them', () => {
+      state().setSearchQuery('utils');
+      expect(state().search.results.map((r) => r.path)).toEqual(['src/lib/utils.ts']);
+      state().clearSearch();
+      expect(state().search).toEqual({ query: '', results: [] });
+    });
+
+    it('toggles the sidebar', () => {
+      state().toggleSidebar();
+      expect(state().sidebarCollapsed).toBe(true);
+      state().toggleSidebar();
+      expect(state().sidebarCollapsed).toBe(false);
+    });
+  });
 });

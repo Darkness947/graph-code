@@ -46,6 +46,13 @@ describe('Workspace (spec 8.6)', () => {
     expect(useWorkspaceStore.getState().graph.nodesById.size).toBe(GRAPH.nodes.length);
   });
 
+  it('draws the directory sidebar beside the canvas', async () => {
+    mockApi(graphRoute(() => Promise.resolve(GRAPH)));
+    renderApp('/repos/repo-1');
+    expect(await screen.findByRole('complementary', { name: 'Directory' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Search files' })).toBeInTheDocument();
+  });
+
   it('explains a graph that is not ready yet', async () => {
     mockApi(graphRoute(fail(409, 'GRAPH_NOT_READY', "This repository's graph isn't ready yet.")));
     renderApp('/repos/repo-1');
