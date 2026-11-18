@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeGraph, SAMPLE } from '../../test/graphFixture.js';
+import { computeVisibleNodes } from '../features/graph/visibility.js';
 import { useWorkspaceStore } from './workspaceStore.js';
 
 const state = () => useWorkspaceStore.getState();
@@ -63,5 +64,43 @@ describe('workspaceStore wrapper folders (decision D-05)', () => {
   it('opens wrapper folders in place on load', () => {
     useWorkspaceStore.getState().loadGraph(makeGraph(['src/a.ts', 'src/b.ts', 'src/c.ts', 'x.ts']));
     expect([...useWorkspaceStore.getState().expandedFolders]).toEqual(['src']);
+  });
+
+  const CLIENT_SERVER = [
+    ...Array.from({ length: 12 }, (_, i) => `client/src/c${i}.ts`),
+    'client/vite.config.ts',
+    ...Array.from({ length: 10 }, (_, i) => `server/src/s${i}.ts`),
+    'server/x.ts',
+  ];
+
+  it('keeps client and server collapsed on load', () => {
+    state().loadGraph(makeGraph(CLIENT_SERVER));
+    expect(state().expandedFolders.size).toBe(0);
+  });
+
+  it('opens the wrapper chain together with a folder, and collapses only that folder', () => {
+    state().loadGraph(makeGraph(CLIENT_SERVER));
+    state().toggleFolder('client');
+    expect([...state().expandedFolders]).toEqual(['client', 'client/src']);
+    state().toggleFolder('client');
+    expect([...state().expandedFolders]).toEqual(['client/src']);
+  });
+
+  it('opens the wrapper chain below a folder it reveals', () => {
+    state().loadGraph(makeGraph(CLIENT_SERVER));
+    state().expandFolder('server');
+    expect([...state().expandedFolders].sort()).toEqual(['server', 'server/src']);
+  });
+
+  it("draws client/src's children inside client after a collapse and re-expand", () => {
+    state().loadGraph(makeGraph(CLIENT_SERVER));
+    state().toggleFolder('client');
+    state().toggleFolder('client');
+    state().toggleFolder('client');
+    const visible = computeVisibleNodes(state().graph, state().expandedFolders);
+    expect(visible.find((v) => v.id === 'd:client/src')).toBeUndefined();
+    expect(visible.find((v) => v.id === 'f:client/src/c0.ts')).toMatchObject({
+      parentId: 'd:client',
+    });
   });
 });

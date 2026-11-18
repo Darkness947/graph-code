@@ -5,6 +5,8 @@ import {
   buildVisibleAncestorMap,
   computeVisibleNodes,
   folderChain,
+  WRAPPER_MIN_FILES,
+  wrapperChain,
   wrapperFolders,
 } from './visibility.js';
 
@@ -96,6 +98,26 @@ describe('folderChain', () => {
 
 describe('wrapperFolders (decision D-05)', () => {
   const index = (files) => buildGraphIndex(makeGraph(files));
+  const CLIENT_SERVER = [
+    ...Array.from({ length: 12 }, (_, i) => `client/src/c${i}.ts`),
+    'client/vite.config.ts',
+    ...Array.from({ length: 10 }, (_, i) => `server/src/s${i}.ts`),
+    'server/x.ts',
+  ];
+
+  it("draws client/src's children directly inside the client tray", () => {
+    const idx = index(['client/src/lib/a.ts', ...CLIENT_SERVER]);
+    const visible = computeVisibleNodes(idx, new Set(['client', 'client/src']));
+    expect(visible.find((v) => v.id === 'd:client/src')).toBeUndefined();
+    expect(visible.find((v) => v.id === 'f:client/src/c0.ts')).toMatchObject({
+      parentId: 'd:client',
+      depth: 1,
+    });
+    expect(visible.find((v) => v.id === 'd:client/src/lib')).toMatchObject({
+      parentId: 'd:client',
+    });
+    expect(visible.find((v) => v.id === 'd:server')).toMatchObject({ expanded: false });
+  });
 
   it('finds a top-level folder holding at least 60% of the files', () => {
     expect([
@@ -103,15 +125,30 @@ describe('wrapperFolders (decision D-05)', () => {
     ]).toEqual(['src']);
   });
 
-  it('repeats the check inside it', () => {
+  it('repeats the check inside it, against the parent folder', () => {
     const files = [
-      'packages/core/a.ts',
-      'packages/core/b.ts',
-      'packages/core/c.ts',
+      ...Array.from({ length: 9 }, (_, i) => `packages/core/f${i}.ts`),
       'packages/ui/d.ts',
       'x.ts',
     ];
     expect([...wrapperFolders(index(files))]).toEqual(['packages', 'packages/core']);
+  });
+
+  it('finds client/src and server/src in a client-server repository', () => {
+    const idx = index(CLIENT_SERVER);
+    expect([...wrapperFolders(idx)].sort()).toEqual(['client/src', 'server/src']);
+    expect(wrapperChain(idx, '')).toEqual([]);
+    expect(wrapperChain(idx, 'client')).toEqual(['client/src']);
+    expect(wrapperChain(idx, 'client/src')).toEqual([]);
+  });
+
+  it('looks for no wrapper inside a folder under the minimum size', () => {
+    const files = [
+      ...Array.from({ length: WRAPPER_MIN_FILES - 2 }, (_, i) => `small/lib/f${i}.ts`),
+      'small/a.ts',
+      ...Array.from({ length: 4 }, (_, i) => `o${i}.ts`),
+    ];
+    expect([...wrapperFolders(index(files))]).toEqual(['small']);
   });
 
   it('finds none when no folder dominates', () => {

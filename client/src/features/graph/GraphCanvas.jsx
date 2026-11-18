@@ -27,12 +27,17 @@ const minimapClass = (n) =>
   n.type === 'file' ? 'gc-mm-file' : n.data.expanded ? 'gc-mm-tray' : 'gc-mm-folder';
 
 /**
- * The folder whose expand or collapse the user just asked for: the deepest path that changed
- * between two sets of expanded folders (expanding a nested folder also opens the ones above it).
+ * The folder whose expand or collapse the user just asked for: the deepest drawn path that
+ * changed between two sets of expanded folders (expanding a nested folder also opens the ones
+ * above it, and expanding a folder opens the wrapper chain below it, which is not drawn).
+ * @param {Set<string>} before
+ * @param {Set<string>} after
+ * @param {(path: string) => boolean} [isDrawn] whether the folder has a node on the canvas
  */
-export function changedFolder(before, after) {
+export function changedFolder(before, after, isDrawn = () => true) {
   let pick = null;
   const consider = (path) => {
+    if (!isDrawn(path)) return;
     if (pick === null || path.split('/').length > pick.split('/').length) pick = path;
   };
   for (const p of after) if (!before.has(p)) consider(p);
@@ -115,10 +120,11 @@ function Canvas() {
   // The view moves only as far as needed, and zooms out only when the folder is larger than
   // the screen.
   useEffect(() => {
-    const path = changedFolder(shownFolders.current, expandedFolders);
+    const folderAt = (path) =>
+      layout.nodes.find((n) => n.type === 'folder' && n.data.path === path);
+    const path = changedFolder(shownFolders.current, expandedFolders, (p) => !!folderAt(p));
     shownFolders.current = expandedFolders;
-    const folder =
-      path !== null && layout.nodes.find((n) => n.type === 'folder' && n.data.path === path);
+    const folder = path !== null && folderAt(path);
     const rect = folder && absoluteRect(layout.nodes, folder.id);
     if (!rect) return;
     const { width, height } = flowStore.getState();
