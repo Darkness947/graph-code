@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { buildGraphIndex } from '../features/graph/graphIndex.js';
 import { computeFocusSet } from '../features/graph/focus.js';
 import { folderChain, wrapperChain } from '../features/graph/visibility.js';
+import { clampDrawerHeight } from '../features/code/codeLanguage.js';
 import { searchFiles } from '../features/search/search.js';
 
 /** Workspace state (spec 8.8). `expandedFolders` is replaced, never mutated, so selectors see changes. */
@@ -69,6 +70,24 @@ export const useWorkspaceStore = create((set, get) => ({
         : {}),
     });
   },
+
+  /** Selects a folder (spec 8.6 "Folder selected"). Focus mode is for files, so it ends. */
+  selectFolder: (id) => {
+    if (get().graph?.nodesById.get(id)?.type !== 'folder') return;
+    set({ selectedNodeId: id, focus: { active: false, nodeIds: [] } });
+  },
+
+  openCode: () => {
+    if (!get().codeDrawer.open) set({ codeDrawer: { ...get().codeDrawer, open: true } });
+  },
+
+  closeCode: () => {
+    if (get().codeDrawer.open) set({ codeDrawer: { ...get().codeDrawer, open: false } });
+  },
+
+  /** Resizes the code drawer, between 20% and 70% of the workspace height. */
+  setCodeHeight: (pct) =>
+    set({ codeDrawer: { ...get().codeDrawer, heightPct: clampDrawerHeight(pct) } }),
 
   /** Leaves focus mode and clears the selection. */
   clearFocus: () => {

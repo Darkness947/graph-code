@@ -26,3 +26,13 @@ export const deleteRepo = (id) => request(`/repos/${encodeURIComponent(id)}`, { 
  * @returns {Promise<{ repository: object, nodes: object[], edges: object[], unresolved: object }>}
  */
 export const getGraph = (id) => request(`/repos/${encodeURIComponent(id)}/graph`);
+
+/**
+ * One file's source, fetched from GitHub at the analysed commit. Files over 1 MB come back as
+ * `{ tooLarge: true }`.
+ * @param {string} id repository id
+ * @param {string} nodeId file node id
+ * @returns {Promise<{ path: string, language: string, content: string } | { tooLarge: true }>}
+ */
+export const getSource = (id, nodeId) =>
+  request(`/repos/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeId)}/source`);
