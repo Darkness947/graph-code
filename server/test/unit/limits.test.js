@@ -9,6 +9,7 @@ const ENV = {
   TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
   GITHUB_CLIENT_ID: 'id',
   GITHUB_CLIENT_SECRET: 'secret',
+  GEMINI_API_KEY: 'key',
 };
 
 describe('limitsFromConfig', () => {

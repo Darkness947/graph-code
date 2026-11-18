@@ -24,15 +24,6 @@ const INT_DEFAULTS = {
   AI_TIMEOUT_MS: 20000,
 };
 
-/**
- * Variables that become required in a later task, once the human has created the external
- * resource (S-04 in T3.5). Until then they may be absent; when present they
- * are accepted as given (these credentials have no fixed format to check).
- */
-export const LATER_REQUIRED = Object.freeze({
-  GEMINI_API_KEY: 'T3.5',
-});
-
 /** Thrown by loadConfig. `problems` lists `{ name, problem }`; there are no values in it. */
 export class ConfigError extends Error {
   /** @param {{ name: string, problem: string }[]} problems */
@@ -148,8 +139,8 @@ export function loadConfig(env = process.env) {
     else cfg.GITHUB_CALLBACK_URL = String(env.GITHUB_CALLBACK_URL).trim();
   }
 
-  // Gemini (key required from T3.5)
-  optional('GEMINI_API_KEY', () => null);
+  // Gemini (S-04). The key has no fixed format to check.
+  required('GEMINI_API_KEY');
   const modelsRaw = isBlank(env.GEMINI_MODELS)
     ? 'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-flash-latest'
     : String(env.GEMINI_MODELS);
@@ -176,7 +167,7 @@ export function loadConfig(env = process.env) {
 /**
  * Reports the state of every known variable without revealing any value.
  * @param {Record<string, string | undefined>} env
- * @returns {{ name: string, status: 'ok' | 'missing' | 'invalid' | 'not set' | 'not yet required', note?: string }[]}
+ * @returns {{ name: string, status: 'ok' | 'missing' | 'invalid' | 'not set', note?: string }[]}
  */
 export function describeConfig(env = process.env) {
   const names = [
@@ -210,12 +201,7 @@ export function describeConfig(env = process.env) {
     if (problem) {
       return { name, status: isBlank(env[name]) ? 'missing' : 'invalid', note: problem };
     }
-    if (isBlank(env[name])) {
-      if (LATER_REQUIRED[name]) {
-        return { name, status: 'not yet required', note: `required from ${LATER_REQUIRED[name]}` };
-      }
-      return { name, status: 'not set', note: 'default or unused' };
-    }
+    if (isBlank(env[name])) return { name, status: 'not set', note: 'default or unused' };
     return { name, status: 'ok' };
   });
 }

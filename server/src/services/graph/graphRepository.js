@@ -3,6 +3,9 @@ import { withTransaction } from '../../db/transaction.js';
 /** Most unresolved imports returned with a graph (spec 7.6). */
 export const UNRESOLVED_LIMIT = 200;
 
+/** Deepest dependent the dependents query follows (spec 7.6). */
+export const DEPENDENTS_MAX_DEPTH = 4;
+
 /** Scopes every query to the signed-in user's repository (spec 7.6): `$1` repo id, `$2` user id. */
 const OWNED = 'JOIN repositories r ON r.id = $1 AND r.user_id = $2';
 
@@ -75,13 +78,13 @@ export function createGraphRepository(pool) {
    * @param {string} userId
    * @param {string} repoId
    * @param {string} nodeId
-   * @returns {Promise<{ path: string, nodeType: string, language: string | null,
-   *   sizeBytes: number | null, commitSha: string | null } | null>}
+   * @returns {Promise<{ id: string, path: string, nodeType: string, language: string | null,
+   *   sizeBytes: number | null, contentHash: string | null, commitSha: string | null } | null>}
    */
   async function findNode(userId, repoId, nodeId) {
     const { rows } = await pool.query(
-      `SELECT n.path, n.node_type AS "nodeType", n.language, n.size_bytes AS "sizeBytes",
-         r.commit_sha AS "commitSha"
+      `SELECT n.id, n.path, n.node_type AS "nodeType", n.language, n.size_bytes AS "sizeBytes",
+         n.content_hash AS "contentHash", r.commit_sha AS "commitSha"
        FROM nodes n ${OWNED} AND n.repository_id = r.id
        WHERE n.id = $3`,
       [repoId, userId, nodeId],
@@ -89,5 +92,77 @@ export function createGraphRepository(pool) {
     return rows[0] ?? null;
   }
 
-  return { readGraph, findNode };
+  /**
+   * Files that import `nodeId`, directly or transitively, up to `maxDepth` hops, each with its
+   * shortest distance (spec 7.6). Cycle-safe. Nearest first, then by path.
+   * @param {string} userId
+   * @param {string} repoId
+   * @param {string} nodeId
+   * @returns {Promise<{ nodeId: string, path: string, contentHash: string | null,
+   *   sizeBytes: number | null, distance: number }[]>}
+   */
+  async function findDependents(userId, repoId, nodeId) {
+    const { rows } = await pool.query(
+      `WITH RECURSIVE dependents AS (
+         SELECT e.source_node_id AS node_id, 1 AS depth,
+                ARRAY[$3::uuid, e.source_node_id] AS visited
+         FROM edges e
+         WHERE e.repository_id = $1 AND e.target_node_id = $3
+         UNION ALL
+         SELECT e.source_node_id, d.depth + 1, d.visited || e.source_node_id
+         FROM edges e
+         JOIN dependents d ON e.target_node_id = d.node_id
+         WHERE e.repository_id = $1
+           AND NOT e.source_node_id = ANY (d.visited)
+           AND d.depth < $4
+       ), shortest AS (
+         SELECT node_id, MIN(depth) AS depth FROM dependents GROUP BY node_id
+       )
+       SELECT n.id AS "nodeId", n.path, n.content_hash AS "contentHash",
+              n.size_bytes AS "sizeBytes", s.depth AS distance
+       FROM shortest s
+       JOIN nodes n ON n.id = s.node_id
+       ${OWNED} AND n.repository_id = r.id
+       ORDER BY s.depth, n.path`,
+      [repoId, userId, nodeId, DEPENDENTS_MAX_DEPTH],
+    );
+    return rows;
+  }
+
+  /**
+   * Every file path of the user's repository.
+   * @param {string} userId
+   * @param {string} repoId
+   * @returns {Promise<Set<string>>}
+   */
+  async function listFilePaths(userId, repoId) {
+    const { rows } = await pool.query(
+      `SELECT n.path FROM nodes n ${OWNED} AND n.repository_id = r.id
+       WHERE n.node_type = 'file'`,
+      [repoId, userId],
+    );
+    return new Set(rows.map((r) => r.path));
+  }
+
+  /**
+   * Import edges whose both ends are in `nodeIds`, as importer → imported paths.
+   * @param {string} userId
+   * @param {string} repoId
+   * @param {string[]} nodeIds
+   * @returns {Promise<{ source: string, target: string }[]>}
+   */
+  async function edgesAmong(userId, repoId, nodeIds) {
+    const { rows } = await pool.query(
+      `SELECT s.path AS source, t.path AS target
+       FROM edges e ${OWNED} AND e.repository_id = r.id
+       JOIN nodes s ON s.id = e.source_node_id
+       JOIN nodes t ON t.id = e.target_node_id
+       WHERE e.source_node_id = ANY ($3::uuid[]) AND e.target_node_id = ANY ($3::uuid[])
+       ORDER BY s.path, t.path`,
+      [repoId, userId, nodeIds],
+    );
+    return rows;
+  }
+
+  return { readGraph, findNode, findDependents, listFilePaths, edgesAmong };
 }

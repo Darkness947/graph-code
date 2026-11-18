@@ -10,6 +10,7 @@ const validEnv = () => ({
   TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
   GITHUB_CLIENT_ID: 'Iv1.testclientid',
   GITHUB_CLIENT_SECRET: 'test-client-secret',
+  GEMINI_API_KEY: 'test-gemini-key',
 });
 
 function problemsOf(env) {
@@ -71,10 +72,12 @@ describe('loadConfig', () => {
     );
   });
 
-  it('requires GitHub credentials but not the Gemini key yet', () => {
+  it('requires GitHub credentials and the Gemini key', () => {
     const cfg = loadConfig(validEnv());
     expect(cfg.GITHUB_CLIENT_ID).toBe('Iv1.testclientid');
-    expect(cfg.GEMINI_API_KEY).toBeUndefined();
+    expect(cfg.GEMINI_API_KEY).toBe('test-gemini-key');
+    const err = problemsOf({ ...validEnv(), GEMINI_API_KEY: ' ' });
+    expect(err.problems).toEqual([{ name: 'GEMINI_API_KEY', problem: 'is required but not set' }]);
   });
 
   it('rejects a SESSION_SECRET shorter than 64 hex characters or not hex', () => {
@@ -168,17 +171,19 @@ describe('loadConfig', () => {
 });
 
 describe('describeConfig', () => {
-  it('marks later-required variables as not yet required and reports no values', () => {
+  it('reports statuses without values', () => {
     const env = validEnv();
     const rows = describeConfig(env);
     const byName = Object.fromEntries(rows.map((r) => [r.name, r]));
     expect(byName.SESSION_SECRET.status).toBe('ok');
     expect(byName.GITHUB_CLIENT_ID.status).toBe('ok');
-    expect(byName.GEMINI_API_KEY.status).toBe('not yet required');
+    expect(byName.GEMINI_API_KEY.status).toBe('ok');
+    expect(byName.AI_TIMEOUT_MS.status).toBe('not set');
     const text = JSON.stringify(rows);
     expect(text).not.toContain(env.SESSION_SECRET);
     expect(text).not.toContain(env.TOKEN_ENCRYPTION_KEY);
     expect(text).not.toContain('dbpass');
+    expect(text).not.toContain(env.GEMINI_API_KEY);
   });
 
   it('marks missing and invalid variables', () => {
