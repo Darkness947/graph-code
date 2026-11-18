@@ -15,7 +15,7 @@
     "db:migrate": "node src/db/cli.js migrate",
     "db:check": "node src/db/cli.js check",
     "config:check": "node src/configCheck.js",
-    "ai:ping": "node -e \"console.error('ai:ping is implemented in T3.5'); process.exit(1)\"",
+    "ai:ping": "node src/aiPing.js",
     "parser:check": "node src/parserCheck.js"
   },
   "dependencies": {

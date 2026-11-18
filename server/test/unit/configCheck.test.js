@@ -19,6 +19,7 @@ const CONFIG_VARS = [
   'TOKEN_KEY_ID',
   'GITHUB_CLIENT_ID',
   'GITHUB_CLIENT_SECRET',
+  'GEMINI_API_KEY',
 ];
 
 let dir;
@@ -47,6 +48,7 @@ beforeAll(() => {
       `TOKEN_ENCRYPTION_KEY=${goodKey}`,
       'GITHUB_CLIENT_ID=fixtureid',
       'GITHUB_CLIENT_SECRET=fixturesecret',
+      'GEMINI_API_KEY=fixturegeminikey',
     ].join('\n'),
   );
 });
@@ -58,7 +60,7 @@ describe('config:check', () => {
     const res = run({ NODE_ENV: 'development' });
     expect(res.status).toBe(0);
     expect(res.stdout).toContain('config:check passed');
-    for (const secret of [goodSecret, goodKey, 'fixturepw']) {
+    for (const secret of [goodSecret, goodKey, 'fixturepw', 'fixturegeminikey']) {
       expect(res.stdout + res.stderr).not.toContain(secret);
     }
   });
