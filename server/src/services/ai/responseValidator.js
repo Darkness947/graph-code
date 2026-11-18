@@ -14,7 +14,7 @@ const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/g;
  *   `filePaths` are every file of the repository's graph; `distances` the dependents' distances
  * @returns {{ summary: string, risks: { path: string, level: 'high' | 'medium' | 'low', reason: string }[],
  *   removedCount: number }}
- * @throws {AppError} AI_MALFORMED
+ * @throws {import('../../errors/AppError.js').AppError} AI_MALFORMED
  */
 export function validateResponse(text, { targetPath, filePaths, distances }) {
   let parsed;

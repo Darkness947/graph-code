@@ -124,7 +124,7 @@ export function createGeminiClient({
   /**
    * @param {{ systemInstruction: string, prompt: string, responseSchema: object, requestId?: string }} input
    * @returns {Promise<{ text: string, model: string, attempts: number, latencyMs: number }>}
-   * @throws {AppError} AI_QUOTA_EXCEEDED, AI_TIMEOUT, AI_MALFORMED or AI_UNREACHABLE, with
+   * @throws {import('../../errors/AppError.js').AppError} AI_QUOTA_EXCEEDED, AI_TIMEOUT, AI_MALFORMED or AI_UNREACHABLE, with
    *   `attempts` set
    */
   async function generateJson({ systemInstruction, prompt, responseSchema, requestId = '-' }) {

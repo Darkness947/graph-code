@@ -35,6 +35,7 @@ export async function mapWithConcurrency(items, limit, task) {
  * in memory only. A file that is too large or cannot be fetched is left out; the analysis still
  * has the graph structure.
  * @param {{ getFileSource: (token: string, owner: string, name: string, path: string, sha: string) => Promise<string> }} github
+ * @param {typeof EXCERPT_LIMITS} [limits]
  */
 export function createCodeRetriever(github, limits = EXCERPT_LIMITS) {
   /**

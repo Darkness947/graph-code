@@ -1,7 +1,7 @@
 import { notReady, nodeNotFound } from '../graph/graphQueryService.js';
 import { auditOutcomeOf } from './aiErrors.js';
 import { computeInputHash, PROMPT_VERSION } from './inputHash.js';
-import { createSubgraphExtractor } from './subgraphExtractor.js';
+import { createSubgraphExtractor, targetNode } from './subgraphExtractor.js';
 import {
   buildBlastRadiusPrompt,
   SYSTEM_INSTRUCTION,
@@ -77,22 +77,24 @@ export function createAnalyzeGraphService({
     });
 
     // No dependents: no Gemini call and no cache write.
+    // The target-only hash identifies the no-dependents case, and any failure before the
+    // subgraph hash exists.
+    let inputHash = computeInputHash({ mode, target, nodes: [targetNode(target)] });
     if (dependents.length === 0) {
-      const targetOnly = [{ path: target.path, contentHash: target.contentHash, distance: 0 }];
-      await record(computeInputHash({ mode, target, nodes: targetOnly }), { outcome: 'success' });
+      await record(inputHash, { outcome: 'success' });
       return {
         ...result({ noDependents: true, dependents: [], summary: '', risks: [], removedCount: 0 }),
         cached: false,
       };
     }
 
-    // 3–4. Subgraph and input hash.
-    const subgraph = await extractor.extract(userId, repositoryId, target, dependents);
-    const inputHash = computeInputHash({ mode, target, nodes: subgraph.nodes });
-    const cacheKey = { userId, repositoryId, mode, targetPath: target.path, inputHash };
-
     let answer = null;
     try {
+      // 3–4. Subgraph and input hash.
+      const subgraph = await extractor.extract(userId, repositoryId, target, dependents);
+      inputHash = computeInputHash({ mode, target, nodes: subgraph.nodes });
+      const cacheKey = { userId, repositoryId, mode, targetPath: target.path, inputHash };
+
       // 5. Cache.
       const hit = await cache.find(cacheKey);
       if (hit) {
@@ -112,11 +114,11 @@ export function createAnalyzeGraphService({
         name: repository.name,
         commitSha: target.commitSha,
         target,
-        dependents: subgraph.dependents,
+        dependents: subgraph.selected,
       });
       const prompt = buildBlastRadiusPrompt({
         targetPath: target.path,
-        dependents: subgraph.dependents,
+        dependents: subgraph.selected,
         edges: subgraph.edges,
         excerpts,
       });
