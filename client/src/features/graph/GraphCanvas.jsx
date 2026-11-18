@@ -3,6 +3,7 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -10,6 +11,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import SearchBar from '../search/SearchBar.jsx';
+import DirectorySidebar from '../sidebar/DirectorySidebar.jsx';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
 import AggregateEdge from './AggregateEdge.jsx';
 import CanvasErrorBoundary from './CanvasErrorBoundary.jsx';
@@ -17,8 +20,10 @@ import FileNode from './FileNode.jsx';
 import FolderNode from './FolderNode.jsx';
 import GraphFallbackList from './GraphFallbackList.jsx';
 import './graph.css';
+import { highlightedVisibleIds } from './focus.js';
 import { layoutGraph } from './layout.js';
 import { MOVE_MS, useAnimatedNodes } from './useAnimatedNodes.js';
+import { buildVisibleAncestorMap } from './visibility.js';
 
 const nodeTypes = { file: FileNode, folder: FolderNode };
 const edgeTypes = { aggregate: AggregateEdge };
@@ -82,6 +87,18 @@ function absoluteRect(nodes, id) {
   return { x, y, width: node.width, height: node.height };
 }
 
+/** The smallest rectangle holding all of `rects`. */
+function union(rects) {
+  const x = Math.min(...rects.map((r) => r.x));
+  const y = Math.min(...rects.map((r) => r.y));
+  return {
+    x,
+    y,
+    width: Math.max(...rects.map((r) => r.x + r.width)) - x,
+    height: Math.max(...rects.map((r) => r.y + r.height)) - y,
+  };
+}
+
 /**
  * Lays out the store's graph and draws it with React Flow (spec 8.6 items 1–7, 10 and 11).
  * Layout runs only when the graph or the expanded folders change; hover only filters which
@@ -91,10 +108,14 @@ function Canvas() {
   const graph = useWorkspaceStore((s) => s.graph);
   const expandedFolders = useWorkspaceStore((s) => s.expandedFolders);
   const expandFolder = useWorkspaceStore((s) => s.expandFolder);
+  const focus = useWorkspaceStore((s) => s.focus);
+  const selectFile = useWorkspaceStore((s) => s.selectFile);
+  const clearFocus = useWorkspaceStore((s) => s.clearFocus);
   const setHovered = useWorkspaceStore((s) => s.setHovered);
   const flow = useReactFlow();
   const flowStore = useStoreApi();
   const shownFolders = useRef(expandedFolders);
+  const fittedFocus = useRef(focus);
 
   const layout = useMemo(() => {
     try {
@@ -126,7 +147,43 @@ function Canvas() {
     return extra.size ? [...layout.edges, ...extra] : layout.edges;
   }, [layout, detailsByNode, hoveredNodeId, selectedNodeId]);
 
-  const { nodes, moving, moveNode } = useAnimatedNodes(layout.nodes);
+  const { nodes: drawn, moving, moveNode } = useAnimatedNodes(layout.nodes);
+
+  // Focus mode (item 8): the focused neighbourhood stays at full opacity, everything else is
+  // dimmed. This only adds classes to the drawn nodes and edges; it never re-runs layout.
+  const lit = useMemo(() => {
+    if (!focus.active) return null;
+    const parentOf = new Map(layout.nodes.map((n) => [n.id, n.parentId ?? null]));
+    return highlightedVisibleIds(
+      focus.nodeIds,
+      buildVisibleAncestorMap(graph, expandedFolders),
+      parentOf,
+    );
+  }, [focus, layout, graph, expandedFolders]);
+  const nodes = useMemo(
+    () =>
+      lit
+        ? drawn.map((n) => {
+            const cls = [
+              lit.has(n.id) ? '' : 'is-dim',
+              n.id === selectedNodeId ? 'is-selected' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            return cls ? { ...n, className: cls } : n;
+          })
+        : drawn,
+    [drawn, lit, selectedNodeId],
+  );
+  const shownEdges = useMemo(
+    () =>
+      lit
+        ? edges.map((e) =>
+            lit.has(e.source) && lit.has(e.target) ? e : { ...e, data: { ...e.data, dim: true } },
+          )
+        : edges,
+    [edges, lit],
+  );
 
   // Dragging: React Flow reports each pointer move as a position change; the node moves in the
   // drawn nodes and its edges follow. Other changes (measured sizes) are ignored, because the
@@ -140,12 +197,32 @@ function Canvas() {
 
   // Keep the folder that was just expanded or collapsed in view (item 6), whoever changed it.
   // The view moves only as far as needed, and zooms out only when the folder is larger than
-  // the screen.
+  // the screen. A change of focus (item 8) moves the view instead: onto the highlighted set,
+  // or back to the whole graph when focus ends.
   useEffect(() => {
     const folderAt = (path) =>
       layout.nodes.find((n) => n.type === 'folder' && n.data.path === path);
     const path = changedFolder(shownFolders.current, expandedFolders, (p) => !!folderAt(p));
     shownFolders.current = expandedFolders;
+
+    if (fittedFocus.current !== focus) {
+      const wasActive = fittedFocus.current.active;
+      fittedFocus.current = focus;
+      if (focus.active && lit) {
+        const rects = layout.nodes
+          .filter((n) => lit.has(n.id) && !(n.type === 'folder' && n.data.expanded))
+          .map((n) => absoluteRect(layout.nodes, n.id));
+        if (rects.length) {
+          flow.fitBounds(union(rects), { padding: 0.2, maxZoom: 1, duration: MOVE_MS });
+        }
+        return;
+      }
+      if (wasActive) {
+        flow.fitView({ ...FIT, duration: MOVE_MS });
+        return;
+      }
+    }
+
     const folder = path !== null && folderAt(path);
     const rect = folder && absoluteRect(layout.nodes, folder.id);
     if (!rect) return;
@@ -160,7 +237,23 @@ function Canvas() {
     } else if (move === 'fit') {
       flow.fitBounds(rect, { padding: 0.08, duration: MOVE_MS });
     }
-  }, [layout, expandedFolders, flow, flowStore]);
+  }, [layout, expandedFolders, focus, lit, flow, flowStore]);
+
+  // Escape leaves focus mode. The search bar claims an Escape that clears a search.
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) clearFocus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [clearFocus]);
+
+  const onNodeClick = useCallback(
+    (_event, node) => {
+      if (node.type === 'file') selectFile(node.id);
+    },
+    [selectFile],
+  );
 
   const onNodeDoubleClick = useCallback(
     (_event, node) => {
@@ -185,7 +278,7 @@ function Canvas() {
     <div className={`gc-canvas${moving ? ' is-moving' : ''}`} data-testid="graph-canvas">
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={shownEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         colorMode="dark"
@@ -200,11 +293,20 @@ function Canvas() {
         nodesConnectable={false}
         elementsSelectable={false}
         zoomOnDoubleClick={false}
+        onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
         onEdgeClick={onEdgeClick}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
       >
+        <Panel position="top-left" className="gc-overlay">
+          <SearchBar />
+          {focus.active && (
+            <button type="button" className="gc-back-pill nodrag nopan" onClick={clearFocus}>
+              ← Back to full graph
+            </button>
+          )}
+        </Panel>
         <Background variant={BackgroundVariant.Dots} gap={22} size={1} />
         <Controls position="bottom-left" showInteractive={false} fitViewOptions={FIT} />
         <MiniMap
@@ -228,7 +330,10 @@ export default function GraphCanvas() {
   return (
     <CanvasErrorBoundary fallback={<GraphFallbackList nodes={graph.nodesById.values()} />}>
       <ReactFlowProvider>
-        <Canvas />
+        <div className="gc-workspace">
+          <DirectorySidebar />
+          <Canvas />
+        </div>
       </ReactFlowProvider>
     </CanvasErrorBoundary>
   );
