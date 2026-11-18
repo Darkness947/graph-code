@@ -415,6 +415,20 @@ describe.skipIf(!hasTestDb)('POST /api/repos/:id/analyze (integration)', () => {
       });
     });
 
+    it('audits an unexpected failure as network_error', async () => {
+      const repoId = await insertRepo(userA, 'unexpected');
+      const ids = await seed(repoId);
+      gemini.generateJson.mockRejectedValue(new Error('boom'));
+      const res = await analyze(cookieA, repoId, ids.utils);
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL');
+      expect((await auditRows(repoId))[0]).toMatchObject({
+        outcome: 'network_error',
+        model: null,
+        attempts: 0,
+      });
+    });
+
     it('still analyzes when an excerpt cannot be fetched', async () => {
       const repoId = await insertRepo(userA, 'flaky');
       const ids = await seed(repoId);

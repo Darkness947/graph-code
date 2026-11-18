@@ -1,14 +1,5 @@
 import { createHash } from 'node:crypto';
 
-/** Audit outcomes allowed by `ai_audit_log.outcome` (spec 5.2). */
-export const AUDIT_OUTCOMES = Object.freeze([
-  'success',
-  'quota_exceeded',
-  'timeout',
-  'malformed_output',
-  'network_error',
-]);
-
 /**
  * @param {string | null | undefined} sessionId
  * @returns {string | null} SHA-256 hex of the session ID; the raw ID is never stored

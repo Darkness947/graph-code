@@ -1,19 +1,11 @@
-import { AppError } from '../../errors/AppError.js';
+import { byPath } from '../../utils/byPath.js';
+import { aiError } from './aiErrors.js';
 
 export const MAX_REASON_CHARS = 400;
-const LEVELS = ['high', 'medium', 'low'];
-const LEVEL_RANK = { high: 0, medium: 1, low: 2 };
+const LEVEL_RANK = Object.freeze({ high: 0, medium: 1, low: 2 });
 // C0 and C1 control characters (tab and newline included: a reason is one line of prose).
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/g;
-
-/** The AI_MALFORMED error (spec 6.1, wording from 8.9). */
-export function malformedError() {
-  return new AppError(
-    'AI_MALFORMED',
-    "Couldn't generate a reliable analysis for this file. Try again.",
-  );
-}
 
 /**
  * Validates and normalizes a model answer (spec 7.7 step 9).
@@ -29,10 +21,10 @@ export function validateResponse(text, { targetPath, filePaths, distances }) {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw malformedError();
+    throw aiError('AI_MALFORMED');
   }
   if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.risks)) {
-    throw malformedError();
+    throw aiError('AI_MALFORMED');
   }
 
   const risks = [];
@@ -43,7 +35,7 @@ export function validateResponse(text, { targetPath, filePaths, distances }) {
       risk &&
       typeof risk.path === 'string' &&
       typeof risk.reason === 'string' &&
-      LEVELS.includes(level) &&
+      Object.hasOwn(LEVEL_RANK, level) &&
       filePaths.has(risk.path) &&
       risk.path !== targetPath;
     if (!valid) {
@@ -53,14 +45,14 @@ export function validateResponse(text, { targetPath, filePaths, distances }) {
     risks.push({ path: risk.path, level, reason: cleanText(risk.reason, MAX_REASON_CHARS) });
   }
   // Every risk dropped from a non-empty list means the answer cannot be trusted.
-  if (risks.length === 0 && parsed.risks.length > 0) throw malformedError();
+  if (risks.length === 0 && parsed.risks.length > 0) throw aiError('AI_MALFORMED');
 
   const distanceOf = (p) => distances.get(p) ?? Number.MAX_SAFE_INTEGER;
   risks.sort(
     (a, b) =>
       LEVEL_RANK[a.level] - LEVEL_RANK[b.level] ||
       distanceOf(a.path) - distanceOf(b.path) ||
-      (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+      byPath(a, b),
   );
 
   const summary = typeof parsed.summary === 'string' ? cleanText(parsed.summary) : '';

@@ -6,7 +6,7 @@ import { attemptOnce, GENERATION_SETTINGS } from './services/ai/geminiClient.js'
 /** A minimal request with no repository data. */
 const PING_REQUEST = Object.freeze({
   contents: 'Reply with this JSON object and nothing else: {"ok": true}',
-  config: { ...GENERATION_SETTINGS },
+  config: GENERATION_SETTINGS,
 });
 
 /**
@@ -33,7 +33,7 @@ export async function runAiPing({ models, timeoutMs, sdk, log = console.log, now
   return rows;
 }
 
-if (process.argv[1]?.endsWith('aiPing.js')) {
+if (import.meta.main) {
   if (process.env.NODE_ENV !== 'production') {
     const { config: loadDotenv } = await import('dotenv');
     loadDotenv({ quiet: true });

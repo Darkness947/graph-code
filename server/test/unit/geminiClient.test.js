@@ -120,7 +120,6 @@ describe('Gemini model router (spec 7.7 step 8)', () => {
     const sdk = fakeSdk({ m1: [apiError(401)], m2: [ok()], m3: [ok()] });
     const err = await failureOf(client(sdk).router.generateJson(INPUT));
     expect(err.code).toBe('AI_UNREACHABLE');
-    expect(err.outcome).toBe('network_error');
     expect(err.attempts).toBe(1);
     expect(sdk.calls.map((c) => c.model)).toEqual(['m1']);
   });
@@ -146,7 +145,7 @@ describe('Gemini model router (spec 7.7 step 8)', () => {
     const incomplete = { text: 'x', candidates: [{ finishReason: 'MAX_TOKENS' }] };
     const sdk = fakeSdk({ m1: [apiError(429)], m2: [apiError(404)], m3: [incomplete] });
     const err = await failureOf(client(sdk).router.generateJson(INPUT));
-    expect(err).toMatchObject({ code: 'AI_MALFORMED', outcome: 'malformed_output', attempts: 3 });
+    expect(err).toMatchObject({ code: 'AI_MALFORMED', attempts: 3 });
   });
 
   it('gives AI_QUOTA_EXCEEDED when every model returns 429', async () => {
@@ -155,7 +154,6 @@ describe('Gemini model router (spec 7.7 step 8)', () => {
     expect(err).toMatchObject({
       code: 'AI_QUOTA_EXCEEDED',
       status: 429,
-      outcome: 'quota_exceeded',
       attempts: 3,
     });
   });
@@ -180,7 +178,7 @@ describe('Gemini model router (spec 7.7 step 8)', () => {
       });
     await vi.advanceTimersByTimeAsync(TIMEOUT_MS + 5000);
     const err = await pending;
-    expect(err).toMatchObject({ code: 'AI_TIMEOUT', outcome: 'timeout', status: 504 });
+    expect(err).toMatchObject({ code: 'AI_TIMEOUT', status: 504 });
     expect(settledAt - start).toBeLessThanOrEqual(TIMEOUT_MS);
     // m1 gets 12 s, m2 the remaining 8 s; m3 is never started (less than 2 s left).
     expect(sdk.calls.map((c) => c.model)).toEqual(['m1', 'm2']);
@@ -237,5 +235,17 @@ describe('classifyError', () => {
     expect(classifyError(new Error('429 RESOURCE_EXHAUSTED quota')).classification).toBe(
       'unavailable',
     );
+  });
+});
+
+describe('AI errors', () => {
+  it('maps each AI code to its audit outcome, and anything else to network_error', async () => {
+    const { aiError, auditOutcomeOf } = await import('../../src/services/ai/aiErrors.js');
+    expect(auditOutcomeOf(aiError('AI_QUOTA_EXCEEDED'))).toBe('quota_exceeded');
+    expect(auditOutcomeOf(aiError('AI_TIMEOUT'))).toBe('timeout');
+    expect(auditOutcomeOf(aiError('AI_MALFORMED'))).toBe('malformed_output');
+    expect(auditOutcomeOf(aiError('AI_UNREACHABLE'))).toBe('network_error');
+    expect(auditOutcomeOf(new Error('db down'))).toBe('network_error');
+    expect(aiError('AI_TIMEOUT', 2)).toMatchObject({ status: 504, attempts: 2 });
   });
 });

@@ -1,11 +1,11 @@
 import { AppError } from '../../errors/AppError.js';
 import { MAX_SOURCE_BYTES } from '../github/githubClient.js';
 
-function notReady() {
+export function notReady() {
   return new AppError('GRAPH_NOT_READY', "This repository's graph isn't ready yet.");
 }
 
-function nodeNotFound() {
+export function nodeNotFound() {
   return new AppError('NOT_FOUND', 'File not found.');
 }
 

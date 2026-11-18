@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { AppError } from '../../errors/AppError.js';
+import { aiError } from './aiErrors.js';
 
 /** Below this much time left, the router stops instead of starting another attempt (spec 7.7). */
 export const MIN_REMAINING_MS = 2000;
@@ -82,26 +82,13 @@ export async function attemptOnce(sdk, model, request, timeoutMs) {
   }
 }
 
-const MESSAGES = {
-  AI_QUOTA_EXCEEDED: 'AI analysis is temporarily unavailable — try again in a moment.',
-  AI_TIMEOUT: 'The AI service took too long to respond. Try again.',
-  AI_MALFORMED: "Couldn't generate a reliable analysis for this file. Try again.",
-  AI_UNREACHABLE: "Couldn't reach the AI service. Check your connection and try again.",
-};
-const OUTCOMES = {
-  AI_QUOTA_EXCEEDED: 'quota_exceeded',
-  AI_TIMEOUT: 'timeout',
-  AI_MALFORMED: 'malformed_output',
-  AI_UNREACHABLE: 'network_error',
-};
-
 /**
- * The final error when no model succeeded (spec 7.7). Carries `outcome` and `attempts` for the
- * audit row; neither is sent to the client.
+ * The final error when no model succeeded (spec 7.7). Carries `attempts` for the audit row; it
+ * is not sent to the client.
  * @param {Classification[]} failures
  * @param {boolean} deadlineReached
  * @param {number} attempts
- * @returns {AppError}
+ * @returns {import('../../errors/AppError.js').AppError}
  */
 export function finalError(failures, deadlineReached, attempts) {
   const last = failures.at(-1);
@@ -111,10 +98,7 @@ export function finalError(failures, deadlineReached, attempts) {
   else if (deadlineReached || last === 'timeout') code = 'AI_TIMEOUT';
   else if (last === 'incomplete') code = 'AI_MALFORMED';
   else code = 'AI_UNREACHABLE';
-  const err = new AppError(code, MESSAGES[code]);
-  err.outcome = OUTCOMES[code];
-  err.attempts = attempts;
-  return err;
+  return aiError(code, attempts);
 }
 
 /**
@@ -134,14 +118,14 @@ export function createGeminiClient({
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }) {
   // The SDK sends the key in a header; it never appears in a URL or a log line. It is built on
-  // first use, so an app that never analyzes (tests, health checks) needs no key.
+  // first use, so apps that tests build without a key never construct it (it warns when keyless).
   let client = sdk;
 
   /**
    * @param {{ systemInstruction: string, prompt: string, responseSchema: object, requestId?: string }} input
    * @returns {Promise<{ text: string, model: string, attempts: number, latencyMs: number }>}
    * @throws {AppError} AI_QUOTA_EXCEEDED, AI_TIMEOUT, AI_MALFORMED or AI_UNREACHABLE, with
-   *   `outcome` and `attempts` set
+   *   `attempts` set
    */
   async function generateJson({ systemInstruction, prompt, responseSchema, requestId = '-' }) {
     client ??= new GoogleGenAI({ apiKey });

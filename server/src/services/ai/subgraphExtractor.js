@@ -1,3 +1,5 @@
+import { byPath } from '../../utils/byPath.js';
+
 /** Most dependents sent to the model with the target (spec 7.7 step 3). */
 export const MAX_SUBGRAPH_DEPENDENTS = 40;
 
@@ -9,9 +11,7 @@ export const MAX_SUBGRAPH_DEPENDENTS = 40;
  * @returns {T[]}
  */
 export function nearestDependents(dependents, limit = MAX_SUBGRAPH_DEPENDENTS) {
-  return [...dependents]
-    .sort((a, b) => a.distance - b.distance || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-    .slice(0, limit);
+  return [...dependents].sort((a, b) => a.distance - b.distance || byPath(a, b)).slice(0, limit);
 }
 
 /**

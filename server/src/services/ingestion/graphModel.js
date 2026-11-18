@@ -1,3 +1,4 @@
+import { byPath } from '../../utils/byPath.js';
 import { randomUUID } from 'node:crypto';
 import { encodePathLtree } from './ltree.js';
 
@@ -23,7 +24,6 @@ import { encodePathLtree } from './ltree.js';
  *   the job report (spec 6.2 Job)
  */
 
-const byPath = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 const lastSegment = (path) => path.slice(path.lastIndexOf('/') + 1);
 
 /**

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { byPath } from '../../utils/byPath.js';
 
 /** Version of the blast-radius prompt; part of the input hash and stored with each result. */
 export const PROMPT_VERSION = 'blast-radius-v1';
@@ -13,9 +14,7 @@ export const PROMPT_VERSION = 'blast-radius-v1';
  * @returns {string} lowercase hex digest
  */
 export function computeInputHash({ mode, target, nodes }) {
-  const sorted = [...nodes]
-    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-    .map((n) => [n.path, n.contentHash ?? null, n.distance]);
+  const sorted = [...nodes].sort(byPath).map((n) => [n.path, n.contentHash ?? null, n.distance]);
   // A fixed key order and array form make the string canonical.
   const canonical = JSON.stringify({
     mode,

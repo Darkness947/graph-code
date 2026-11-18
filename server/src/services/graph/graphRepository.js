@@ -78,8 +78,8 @@ export function createGraphRepository(pool) {
    * @param {string} userId
    * @param {string} repoId
    * @param {string} nodeId
-   * @returns {Promise<{ path: string, nodeType: string, language: string | null,
-   *   sizeBytes: number | null, commitSha: string | null } | null>}
+   * @returns {Promise<{ id: string, path: string, nodeType: string, language: string | null,
+   *   sizeBytes: number | null, contentHash: string | null, commitSha: string | null } | null>}
    */
   async function findNode(userId, repoId, nodeId) {
     const { rows } = await pool.query(
@@ -98,36 +98,35 @@ export function createGraphRepository(pool) {
    * @param {string} userId
    * @param {string} repoId
    * @param {string} nodeId
-   * @param {number} [maxDepth]
    * @returns {Promise<{ nodeId: string, path: string, contentHash: string | null,
    *   sizeBytes: number | null, distance: number }[]>}
    */
-  async function findDependents(userId, repoId, nodeId, maxDepth = DEPENDENTS_MAX_DEPTH) {
+  async function findDependents(userId, repoId, nodeId) {
     const { rows } = await pool.query(
       `WITH RECURSIVE dependents AS (
          SELECT e.source_node_id AS node_id, 1 AS depth,
-                ARRAY[$1::uuid, e.source_node_id] AS visited
+                ARRAY[$3::uuid, e.source_node_id] AS visited
          FROM edges e
-         WHERE e.repository_id = $2 AND e.target_node_id = $1
+         WHERE e.repository_id = $1 AND e.target_node_id = $3
          UNION ALL
          SELECT e.source_node_id, d.depth + 1, d.visited || e.source_node_id
          FROM edges e
          JOIN dependents d ON e.target_node_id = d.node_id
-         WHERE e.repository_id = $2
+         WHERE e.repository_id = $1
            AND NOT e.source_node_id = ANY (d.visited)
-           AND d.depth < $3
+           AND d.depth < $4
        ), shortest AS (
          SELECT node_id, MIN(depth) AS depth FROM dependents GROUP BY node_id
        )
        SELECT n.id AS "nodeId", n.path, n.content_hash AS "contentHash",
               n.size_bytes AS "sizeBytes", s.depth AS distance
        FROM shortest s
-       JOIN nodes n ON n.id = s.node_id AND n.repository_id = $2
-       JOIN repositories r ON r.id = $2 AND r.user_id = $4
+       JOIN nodes n ON n.id = s.node_id
+       ${OWNED} AND n.repository_id = r.id
        ORDER BY s.depth, n.path`,
-      [nodeId, repoId, maxDepth, userId],
+      [repoId, userId, nodeId, DEPENDENTS_MAX_DEPTH],
     );
-    return rows.map((r) => ({ ...r, distance: Number(r.distance) }));
+    return rows;
   }
 
   /**
