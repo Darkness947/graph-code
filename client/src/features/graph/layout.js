@@ -36,8 +36,10 @@ const SPACING = {
 /**
  * @param {{ nodesById: Map<string, any>, childrenByPath: Map<string, string[]>, edges: object[] }} index
  * @param {Set<string>} expandedFolders folder paths
- * @returns {{ nodes: object[], edges: object[] }} React Flow nodes (parents first; child positions
- *   relative to their parent) and edges
+ * @returns {{ nodes: object[], edges: object[], details: object[] }} React Flow nodes (parents
+ *   first; child positions relative to their parent); `edges`, the bundles drawn at rest, one
+ *   per pair of siblings joined by imports (decision D-06); and `details`, the file-level edges
+ *   a bundle stands for, drawn only for the hovered or selected node
  */
 export function layoutGraph(index, expandedFolders) {
   const visible = computeVisibleNodes(index, expandedFolders);
@@ -68,23 +70,44 @@ export function layoutGraph(index, expandedFolders) {
     }
   }
 
-  // Each edge links two children of the innermost container holding both ends: one pass
-  // over the edges, grouped by that container.
-  const linksIn = new Map();
   const chain = (id) => {
     const out = [id];
     for (let p = visById.get(id).parentId; p != null; p = visById.get(p).parentId) out.push(p);
     out.push(null);
     return out;
   };
-  for (const edge of visibleEdges) {
+  /**
+   * Where an edge's ends meet: the innermost container holding both, and the nodes from each
+   * end up to (not including) that container. The last of each side are siblings in it.
+   */
+  const meetOf = (edge) => {
     const up = chain(edge.source);
     const down = chain(edge.target);
     const at = new Map(down.map((id, i) => [id, i]));
     const i = up.findIndex((id, k) => k > 0 && at.has(id));
     const container = up[i];
-    if (!linksIn.has(container)) linksIn.set(container, new Set());
-    linksIn.get(container).add(`${up[i - 1]}\n${down[at.get(container) - 1]}`);
+    return { container, sourceSide: up.slice(0, i), targetSide: down.slice(0, at.get(container)) };
+  };
+
+  // Bundles (decision D-06): at rest every edge is drawn between the two siblings where its
+  // ends meet, merged per pair. These are exactly the links Dagre lays out in each container.
+  const bundles = new Map();
+  const details = [];
+  for (const edge of visibleEdges) {
+    const meet = meetOf(edge);
+    const source = meet.sourceSide.at(-1);
+    const target = meet.targetSide.at(-1);
+    const key = `${source}->${target}`;
+    const found = bundles.get(key);
+    if (found) found.count += edge.count;
+    else
+      bundles.set(key, { id: key, source, target, count: edge.count, container: meet.container });
+    if (source !== edge.source || target !== edge.target) details.push({ edge, meet });
+  }
+  const linksIn = new Map();
+  for (const b of bundles.values()) {
+    if (!linksIn.has(b.container)) linksIn.set(b.container, new Set());
+    linksIn.get(b.container).add(`${b.source}\n${b.target}`);
   }
 
   /** Lays out a container's children; returns the size of the content. */
@@ -169,19 +192,11 @@ export function layoutGraph(index, expandedFolders) {
    *   the nodes on the ranks it passes.
    * - It enters each tray around the imported node through the tray's top centre, and ends at
    *   the node's top centre.
-   * Edges into a folder therefore arrive as one bundle instead of crossing it. An edge between
-   * neighbouring siblings has no route and is drawn as a plain curve.
+   * A bundle runs between siblings, so it uses no ports. An edge between neighbouring siblings
+   * has no route and is drawn as a plain curve.
    * `label` is the segment (between points label and label + 1) that carries the count badge.
    */
-  const routeOf = (e) => {
-    const up = chain(e.source);
-    const down = chain(e.target);
-    const at = new Map(down.map((id, i) => [id, i]));
-    const i = up.findIndex((id, k) => k > 0 && at.has(id));
-    const container = up[i];
-    const sourceSide = up.slice(0, i);
-    const targetSide = down.slice(0, at.get(container));
-
+  const routeOf = ({ container, sourceSide, targetSide }) => {
     const { routes, offset } = routesIn.get(container);
     const dagrePoints = routes.get(`${sourceSide.at(-1)}\n${targetSide.at(-1)}`) ?? [];
     if (sourceSide.length === 1 && targetSide.length === 1 && dagrePoints.length <= 3) return null;
@@ -198,24 +213,47 @@ export function layoutGraph(index, expandedFolders) {
     };
   };
 
-  const edges = visibleEdges.map((e) => {
-    // Drawing order follows the deeper end, so an edge sits inside the tray it runs in.
+  const isCollapsed = (id) => visById.get(id).kind === 'folder' && !visById.get(id).expanded;
+  const toFlowEdge = (e, meet, detail) => {
+    // Drawing order follows the deeper end, so an edge sits inside the tray it runs in. A detail
+    // edge is drawn one level higher, over the cards it passes, because it is the one being read.
     const depth = Math.max(visById.get(e.source).depth, visById.get(e.target).depth);
-    // A click on an aggregated edge expands its target when that is a folder (item 3).
-    const target = index.nodesById.get(e.target);
-    const expandPath = e.aggregated && target.type === 'folder' ? target.path : null;
+    // A detail edge carries no badge: its bundle already shows the count at the same spot.
+    const aggregated = !detail && (e.count > 1 || isCollapsed(e.source) || isCollapsed(e.target));
+    // A click on an aggregated edge expands its target when that is a collapsed folder (item 3).
+    const target = visById.get(e.target);
+    const expandPath =
+      aggregated && target.kind === 'folder' && !target.expanded
+        ? index.nodesById.get(e.target).path
+        : null;
     return {
       id: e.id,
       ...(expandPath ? { className: 'has-expand' } : {}),
       source: e.source,
       target: e.target,
       type: 'aggregate',
-      zIndex: depth,
-      data: { count: e.count, aggregated: e.aggregated, expandPath, depth, route: routeOf(e) },
+      zIndex: detail ? depth + 1 : depth,
+      data: {
+        count: e.count,
+        aggregated,
+        expandPath,
+        depth,
+        detail,
+        route: routeOf(meet),
+      },
     };
-  });
+  };
 
-  return { nodes, edges };
+  const edges = [...bundles.values()].map((b) =>
+    toFlowEdge(
+      b,
+      { container: b.container, sourceSide: [b.source], targetSide: [b.target] },
+      false,
+    ),
+  );
+  const detailEdges = details.map(({ edge, meet }) => toFlowEdge(edge, meet, true));
+
+  return { nodes, edges, details: detailEdges };
 }
 
 /** Centrality cut-offs depend only on the graph, so they are computed once per index. */
