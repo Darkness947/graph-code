@@ -64,4 +64,30 @@ describe('workspaceStore wrapper folders (decision D-05)', () => {
     useWorkspaceStore.getState().loadGraph(makeGraph(['src/a.ts', 'src/b.ts', 'src/c.ts', 'x.ts']));
     expect([...useWorkspaceStore.getState().expandedFolders]).toEqual(['src']);
   });
+
+  const CLIENT_SERVER = [
+    ...Array.from({ length: 12 }, (_, i) => `client/src/c${i}.ts`),
+    'client/vite.config.ts',
+    ...Array.from({ length: 10 }, (_, i) => `server/src/s${i}.ts`),
+    'server/x.ts',
+  ];
+
+  it('keeps client and server collapsed on load', () => {
+    state().loadGraph(makeGraph(CLIENT_SERVER));
+    expect(state().expandedFolders.size).toBe(0);
+  });
+
+  it('opens the wrapper chain together with a folder, and collapses only that folder', () => {
+    state().loadGraph(makeGraph(CLIENT_SERVER));
+    state().toggleFolder('client');
+    expect([...state().expandedFolders]).toEqual(['client', 'client/src']);
+    state().toggleFolder('client');
+    expect([...state().expandedFolders]).toEqual(['client/src']);
+  });
+
+  it('opens the wrapper chain below a folder it reveals', () => {
+    state().loadGraph(makeGraph(CLIENT_SERVER));
+    state().expandFolder('server');
+    expect([...state().expandedFolders].sort()).toEqual(['server', 'server/src']);
+  });
 });

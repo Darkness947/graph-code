@@ -251,6 +251,24 @@ describe('wrapper folders (decision D-05)', () => {
   });
 });
 
+describe('nested wrapper folders (decision D-05)', () => {
+  const files = [
+    ...Array.from({ length: 4 }, (_, i) => `client/src/c${i}.ts`),
+    ...Array.from({ length: 8 }, (_, i) => `client/src/lib/l${i}.ts`),
+    'client/vite.config.ts',
+    ...Array.from({ length: 10 }, (_, i) => `server/src/s${i}.ts`),
+  ];
+  const graph = makeGraph(files, [['client/src/c0.ts', 'client/src/lib/l0.ts']]);
+
+  it("draws client/src's children inside the client tray, with no src tray", () => {
+    const result = layoutGraph(buildGraphIndex(graph), new Set(['client', 'client/src']));
+    expect(node(result, 'd:client/src')).toBeUndefined();
+    expect(node(result, 'f:client/src/c0.ts').parentId).toBe('d:client');
+    expect(node(result, 'd:client/src/lib').parentId).toBe('d:client');
+    expect(node(result, 'd:server').data).toMatchObject({ expanded: false });
+  });
+});
+
 describe('edge ports inside a wrapped grid', () => {
   // `big` has 9 children, so it is a grid with no Dagre routes; two of them are trays.
   const files = [

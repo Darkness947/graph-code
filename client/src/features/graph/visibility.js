@@ -4,7 +4,8 @@
  * A node is visible when every folder above it is expanded. A visible folder is either
  * expanded (drawn as a container around its children) or collapsed (drawn as one node that
  * stands in for everything inside it). On load, every top-level folder starts collapsed,
- * except a wrapper folder (see `wrapperFolders`), which is opened in place.
+ * except a wrapper folder (see `wrapperFolders`), which is opened in place. Opening any folder
+ * also opens the wrapper chain below it (`wrapperChain`).
  */
 
 /** A folder holding at least this share of all files is a wrapper (decision D-05). */
@@ -12,30 +13,70 @@ export const WRAPPER_SHARE = 0.6;
 
 const wrapperCache = new WeakMap();
 
+const fileCount = (node) => node.metrics?.fileCount ?? 0;
+
+const folderChildren = (index, path) =>
+  (index.childrenByPath.get(path) ?? [])
+    .map((id) => index.nodesById.get(id))
+    .filter((n) => n.type === 'folder');
+
+const totalFiles = (index) => {
+  let total = 0;
+  for (const n of index.nodesById.values()) if (n.type === 'file') total += 1;
+  return total;
+};
+
 /**
- * Wrapper folders: a top-level folder that holds most of the repository (`src` in a typical
- * app), and the same check repeated inside it. While expanded, a wrapper is drawn without a
- * tray: its children take its place at its level, so no layer of the canvas is spent on a
- * folder that holds everything. Decision D-05, a deliberate deviation from spec 8.6 item 1.
+ * Below the top level, a folder needs at least this many files before a wrapper is looked for
+ * inside it: in a small folder a nested tray costs little and its grouping still means something.
+ */
+export const WRAPPER_MIN_FILES = 10;
+
+/** The child folder of `path` holding at least `WRAPPER_SHARE` of its `size` files, if any. */
+const wrapperChild = (index, path, size) =>
+  size > 0 && (path === '' || size >= WRAPPER_MIN_FILES)
+    ? folderChildren(index, path).find((n) => fileCount(n) >= size * WRAPPER_SHARE)
+    : undefined;
+
+/**
+ * Wrapper folders: a folder holding most of its parent folder's files (`src` in a typical app,
+ * `client/src` and `server/src` in a client-server repository); at the top level the share is
+ * measured against all files. While expanded, a wrapper is drawn without a tray: its children
+ * take its place at its parent's level, so no layer of the canvas is spent on a folder that
+ * holds nearly everything around it. Decision D-05, a deliberate deviation from spec 8.6 item 1.
  * @param {{ nodesById: Map<string, any>, childrenByPath: Map<string, string[]> }} index
- * @returns {Set<string>} folder paths, outermost first
+ * @returns {Set<string>} folder paths, parents before their children
  */
 export function wrapperFolders(index) {
   let found = wrapperCache.get(index);
   if (found) return found;
   found = new Set();
-  let total = 0;
-  for (const n of index.nodesById.values()) if (n.type === 'file') total += 1;
-  for (let path = ''; total > 0;) {
-    const big = (index.childrenByPath.get(path) ?? [])
-      .map((id) => index.nodesById.get(id))
-      .find((n) => n.type === 'folder' && (n.metrics?.fileCount ?? 0) >= total * WRAPPER_SHARE);
-    if (!big) break;
-    found.add(big.path);
-    path = big.path;
-  }
+  const visit = (path, size) => {
+    const big = wrapperChild(index, path, size);
+    if (big) found.add(big.path);
+    for (const folder of folderChildren(index, path)) visit(folder.path, fileCount(folder));
+  };
+  visit('', totalFiles(index));
   wrapperCache.set(index, found);
   return found;
+}
+
+/**
+ * The wrapper folders that open together with `path`: its wrapper child, that folder's own
+ * wrapper child, and so on. With `path` = '' these are the folders opened on load.
+ * @param {{ nodesById: Map<string, any>, childrenByPath: Map<string, string[]> }} index
+ * @param {string} path folder path, '' for the root
+ * @returns {string[]} outermost first
+ */
+export function wrapperChain(index, path) {
+  const wrappers = wrapperFolders(index);
+  const chain = [];
+  for (let at = path; ;) {
+    const next = folderChildren(index, at).find((n) => wrappers.has(n.path));
+    if (!next) return chain;
+    chain.push(next.path);
+    at = next.path;
+  }
 }
 
 /**

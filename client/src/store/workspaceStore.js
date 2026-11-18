@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { buildGraphIndex } from '../features/graph/graphIndex.js';
-import { folderChain, wrapperFolders } from '../features/graph/visibility.js';
+import { folderChain, wrapperChain } from '../features/graph/visibility.js';
 
 /** Workspace state (spec 8.8). `expandedFolders` is replaced, never mutated, so selectors see changes. */
 const initialState = () => ({
@@ -20,25 +20,29 @@ export const useWorkspaceStore = create((set, get) => ({
 
   /**
    * Loads a `Graph` from the API. Every top-level folder starts collapsed (spec 8.6 item 1),
-   * except wrapper folders, which open in place (decision D-05).
+   * except top-level wrapper folders, which open in place (decision D-05).
    */
   loadGraph: (graph) => {
     const index = buildGraphIndex(graph);
-    set({ ...initialState(), graph: index, expandedFolders: new Set(wrapperFolders(index)) });
+    set({ ...initialState(), graph: index, expandedFolders: new Set(wrapperChain(index, '')) });
   },
 
-  /** Expands a collapsed folder or collapses an expanded one. */
+  /**
+   * Expands a collapsed folder or collapses an expanded one. Expanding also opens the wrapper
+   * chain below it (decision D-05), so `client` shows `client/src`'s children directly.
+   */
   toggleFolder: (path) => {
-    const next = new Set(get().expandedFolders);
+    const { graph, expandedFolders } = get();
+    const next = new Set(expandedFolders);
     if (next.has(path)) next.delete(path);
-    else next.add(path);
+    else for (const p of [path, ...(graph ? wrapperChain(graph, path) : [])]) next.add(p);
     set({ expandedFolders: next });
   },
 
-  /** Expands a folder and every folder above it, so it is visible and open. */
+  /** Expands a folder, every folder above it and the wrapper chain below it. */
   expandFolder: (path) => {
-    const { expandedFolders } = get();
-    const wanted = folderChain(path);
+    const { graph, expandedFolders } = get();
+    const wanted = [...folderChain(path), ...(graph ? wrapperChain(graph, path) : [])];
     if (wanted.every((p) => expandedFolders.has(p))) return;
     set({ expandedFolders: new Set([...expandedFolders, ...wanted]) });
   },
