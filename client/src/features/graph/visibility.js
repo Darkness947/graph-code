@@ -4,8 +4,9 @@
  * A node is visible when every folder above it is expanded. A visible folder is either
  * expanded (drawn as a container around its children) or collapsed (drawn as one node that
  * stands in for everything inside it). On load, every top-level folder starts collapsed,
- * except a wrapper folder (see `wrapperFolders`), which is opened in place. Opening any folder
- * also opens the wrapper chain below it (`wrapperChain`).
+ * except the wrapper chain from the root (see `wrapperFolders`), which is opened in place.
+ * Nested wrappers such as `client/src` stay closed until their parent opens: opening any
+ * folder also opens the wrapper chain below it (`wrapperChain`).
  */
 
 /** A folder holding at least this share of all files is a wrapper (decision D-05). */
@@ -29,6 +30,7 @@ const totalFiles = (index) => {
 /**
  * Below the top level, a folder needs at least this many files before a wrapper is looked for
  * inside it: in a small folder a nested tray costs little and its grouping still means something.
+ * The top level is exempt, because a top-level wrapper replaces no tray, only a lone box.
  */
 export const WRAPPER_MIN_FILES = 10;
 

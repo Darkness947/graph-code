@@ -155,6 +155,11 @@ describe('changedFolder', () => {
   it('returns null when nothing changed', () => {
     expect(changedFolder(new Set(['src']), new Set(['src']))).toBeNull();
   });
+
+  it('skips a changed folder that is not drawn (an expanded wrapper, decision D-05)', () => {
+    const drawn = (p) => p !== 'client/src';
+    expect(changedFolder(new Set(), new Set(['client', 'client/src']), drawn)).toBe('client');
+  });
 });
 
 describe('keepInViewMove', () => {

@@ -20,7 +20,7 @@ export const useWorkspaceStore = create((set, get) => ({
 
   /**
    * Loads a `Graph` from the API. Every top-level folder starts collapsed (spec 8.6 item 1),
-   * except top-level wrapper folders, which open in place (decision D-05).
+   * except the wrapper chain from the root, which opens in place (decision D-05).
    */
   loadGraph: (graph) => {
     const index = buildGraphIndex(graph);

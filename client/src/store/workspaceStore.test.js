@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeGraph, SAMPLE } from '../../test/graphFixture.js';
+import { computeVisibleNodes } from '../features/graph/visibility.js';
 import { useWorkspaceStore } from './workspaceStore.js';
 
 const state = () => useWorkspaceStore.getState();
@@ -89,5 +90,17 @@ describe('workspaceStore wrapper folders (decision D-05)', () => {
     state().loadGraph(makeGraph(CLIENT_SERVER));
     state().expandFolder('server');
     expect([...state().expandedFolders].sort()).toEqual(['server', 'server/src']);
+  });
+
+  it("draws client/src's children inside client after a collapse and re-expand", () => {
+    state().loadGraph(makeGraph(CLIENT_SERVER));
+    state().toggleFolder('client');
+    state().toggleFolder('client');
+    state().toggleFolder('client');
+    const visible = computeVisibleNodes(state().graph, state().expandedFolders);
+    expect(visible.find((v) => v.id === 'd:client/src')).toBeUndefined();
+    expect(visible.find((v) => v.id === 'f:client/src/c0.ts')).toMatchObject({
+      parentId: 'd:client',
+    });
   });
 });
