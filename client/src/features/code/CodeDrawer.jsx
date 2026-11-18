@@ -140,7 +140,7 @@ export default function CodeDrawer({ repoId, containerRef }) {
     return (
       <div className="code-drawer is-closed">
         <button type="button" className="code-handle" aria-expanded="false" onClick={openCode}>
-          Code <i className="bi bi-chevron-up" aria-hidden="true" />
+          Code ▲
         </button>
       </div>
     );

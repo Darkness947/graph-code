@@ -133,7 +133,6 @@ function FileDetails({ node }) {
 }
 
 function FolderDetails({ node }) {
-  const expanded = useWorkspaceStore((s) => s.expandedFolders.has(node.path));
   const expandFolder = useWorkspaceStore((s) => s.expandFolder);
   return (
     <>
@@ -141,15 +140,13 @@ function FolderDetails({ node }) {
         <h2 className="ins-path ins-mono">{node.path}</h2>
       </header>
       <p className="ins-note">{countOf(node.metrics?.fileCount ?? 0, 'file', 'files')}</p>
-      {!expanded && (
-        <button
-          type="button"
-          className="btn btn-outline-secondary ins-action"
-          onClick={() => expandFolder(node.path)}
-        >
-          Expand on canvas
-        </button>
-      )}
+      <button
+        type="button"
+        className="btn btn-outline-secondary ins-action"
+        onClick={() => expandFolder(node.path)}
+      >
+        Expand on canvas
+      </button>
     </>
   );
 }

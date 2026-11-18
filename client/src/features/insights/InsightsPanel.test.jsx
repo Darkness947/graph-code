@@ -122,7 +122,7 @@ describe('InsightsPanel (spec 8.6)', () => {
 
       await user.click(screen.getByRole('button', { name: 'Expand on canvas' }));
       expect(store().expandedFolders.has('src')).toBe(true);
-      expect(screen.queryByRole('button', { name: 'Expand on canvas' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Expand on canvas' })).toBeInTheDocument();
     });
   });
 });
