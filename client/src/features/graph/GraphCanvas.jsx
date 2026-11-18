@@ -108,12 +108,23 @@ function Canvas() {
   // the hovered or selected node (decision D-06). This filters a list; it never re-runs layout.
   const hoveredNodeId = useWorkspaceStore((s) => s.hoveredNodeId);
   const selectedNodeId = useWorkspaceStore((s) => s.selectedNodeId);
+  const detailsByNode = useMemo(() => {
+    const map = new Map();
+    for (const e of layout.details) {
+      for (const id of [e.source, e.target]) {
+        if (!map.has(id)) map.set(id, []);
+        map.get(id).push(e);
+      }
+    }
+    return map;
+  }, [layout]);
   const edges = useMemo(() => {
-    const shown = new Set([hoveredNodeId, selectedNodeId].filter(Boolean));
-    if (shown.size === 0) return layout.edges;
-    const extra = layout.details.filter((e) => shown.has(e.source) || shown.has(e.target));
-    return extra.length ? [...layout.edges, ...extra] : layout.edges;
-  }, [layout, hoveredNodeId, selectedNodeId]);
+    const extra = new Set();
+    for (const id of [hoveredNodeId, selectedNodeId]) {
+      for (const e of detailsByNode.get(id) ?? []) extra.add(e);
+    }
+    return extra.size ? [...layout.edges, ...extra] : layout.edges;
+  }, [layout, detailsByNode, hoveredNodeId, selectedNodeId]);
 
   const { nodes, moving, moveNode } = useAnimatedNodes(layout.nodes);
 

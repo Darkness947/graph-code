@@ -114,6 +114,12 @@ describe('GraphCanvas', () => {
     expect(vi.mocked(layoutModule.layoutGraph).mock.calls.length).toBe(calls);
   });
 
+  it('draws the detail edges of the selected node', async () => {
+    await renderCanvas(['src']);
+    act(() => useWorkspaceStore.setState({ selectedNodeId: 'f:index.ts' }));
+    expect(edgeEl('f:index.ts->d:src/lib').querySelector('.gc-edge')).toHaveClass('is-active');
+  });
+
   it('sets the hovered node from the pointer', async () => {
     await renderCanvas();
     fireEvent.mouseEnter(nodeEl('f:index.ts'));

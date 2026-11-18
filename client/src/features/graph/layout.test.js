@@ -137,8 +137,11 @@ describe('layoutGraph', () => {
   it('expands nothing from an edge whose target is a file', () => {
     const result = layout(SAMPLE, ['src', 'src/lib']);
     // app (collapsed) -> src/lib/utils.ts: aggregated because of the folder, but the target is a file.
-    const edge = result.details.find((e) => e.id === 'd:app->f:src/lib/utils.ts');
-    expect(edge.data).toMatchObject({ aggregated: true, expandPath: null });
+    // At rest it is bundled as app -> src, which also expands nothing: src is open.
+    const bundle = result.edges.find((e) => e.id === 'd:app->d:src');
+    expect(bundle.data).toMatchObject({ aggregated: true, expandPath: null });
+    const detail = result.details.find((e) => e.id === 'd:app->f:src/lib/utils.ts');
+    expect(detail.data).toMatchObject({ aggregated: false, expandPath: null });
   });
 
   it('orders a wrapped grid so importers come before what they import', () => {
@@ -334,5 +337,33 @@ describe('edge bundles (decision D-06)', () => {
     const bundle = result.edges.find((e) => e.id === 'd:ctrl->d:models');
     expect(bundle.data).toMatchObject({ count: 3, expandPath: null });
     expect(bundle.className).toBeUndefined();
+  });
+
+  it('badges a bundle between two open folders only when it carries several imports', () => {
+    const one = makeGraph(
+      ['p/a.ts', 'p/x.ts', 'q/b.ts', 'q/y.ts', ...OTHERS],
+      [['p/a.ts', 'q/b.ts']],
+    );
+    const bundle = layout(one, ['p', 'q']).edges.find((e) => e.id === 'd:p->d:q');
+    expect(bundle.data).toMatchObject({ count: 1, aggregated: false, expandPath: null });
+  });
+
+  it('gives detail edges no badge and a finite route that starts at the file', () => {
+    const nested = makeGraph(
+      ['outer/inner/f.ts', 'outer/g.ts', 'models/m.ts', 'models/n.ts', ...OTHERS],
+      [['outer/inner/f.ts', 'models/m.ts']],
+    );
+    const result = layout(nested, ['outer', 'outer/inner']);
+    const detail = result.details.find((e) => e.id === 'f:outer/inner/f.ts->d:models');
+    expect(detail.data).toMatchObject({ aggregated: false, expandPath: null, detail: true });
+    const { points } = detail.data.route;
+    expect(points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
+    const f = node(result, 'f:outer/inner/f.ts');
+    const inner = node(result, 'd:outer/inner');
+    const outer = node(result, 'd:outer');
+    expect(points[0]).toEqual({
+      x: outer.position.x + inner.position.x + f.position.x + f.width / 2,
+      y: outer.position.y + inner.position.y + f.position.y + f.height,
+    });
   });
 });

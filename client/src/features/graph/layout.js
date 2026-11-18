@@ -213,11 +213,13 @@ export function layoutGraph(index, expandedFolders) {
     };
   };
 
-  const isFolder = (id) => index.nodesById.get(id).type === 'folder';
+  const isCollapsed = (id) => visById.get(id).kind === 'folder' && !visById.get(id).expanded;
   const toFlowEdge = (e, meet, detail) => {
-    // Drawing order follows the deeper end, so an edge sits inside the tray it runs in.
+    // Drawing order follows the deeper end, so an edge sits inside the tray it runs in. A detail
+    // edge is drawn one level higher, over the cards it passes, because it is the one being read.
     const depth = Math.max(visById.get(e.source).depth, visById.get(e.target).depth);
-    const aggregated = e.count > 1 || isFolder(e.source) || isFolder(e.target);
+    // A detail edge carries no badge: its bundle already shows the count at the same spot.
+    const aggregated = !detail && (e.count > 1 || isCollapsed(e.source) || isCollapsed(e.target));
     // A click on an aggregated edge expands its target when that is a collapsed folder (item 3).
     const target = visById.get(e.target);
     const expandPath =
