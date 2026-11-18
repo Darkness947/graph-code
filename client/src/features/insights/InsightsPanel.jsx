@@ -125,7 +125,7 @@ function FileDetails({ node }) {
       </p>
       <FileList title="Imports" files={imports} onSelect={selectFile} />
       <FileList title="Used by" files={usedBy} onSelect={selectFile} />
-      <button type="button" className="btn btn-outline-secondary ins-view-code" onClick={openCode}>
+      <button type="button" className="btn btn-outline-secondary ins-action" onClick={openCode}>
         View code
       </button>
     </>
@@ -144,7 +144,7 @@ function FolderDetails({ node }) {
       {!expanded && (
         <button
           type="button"
-          className="btn btn-outline-secondary ins-view-code"
+          className="btn btn-outline-secondary ins-action"
           onClick={() => expandFolder(node.path)}
         >
           Expand on canvas
@@ -162,7 +162,7 @@ function FolderDetails({ node }) {
  */
 export default function InsightsPanel({ unresolved, skippedFiles = 0 }) {
   const graph = useWorkspaceStore((s) => s.graph);
-  const selected = useWorkspaceStore((s) => graph?.nodesById.get(s.selectedNodeId));
+  const selected = useWorkspaceStore((s) => s.graph?.nodesById.get(s.selectedNodeId));
   const files = useMemo(
     () => [...graph.nodesById.values()].filter((n) => n.type === 'file').length,
     [graph],

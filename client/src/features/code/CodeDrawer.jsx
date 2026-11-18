@@ -1,5 +1,5 @@
 import { Highlight } from 'prism-react-renderer';
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { getSource } from '../../api/repos.js';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
 import { handleUnauthenticated } from '../repos/useRepositories.js';
@@ -37,16 +37,29 @@ function useSource(repoId, nodeId) {
   return [result.key === key ? result : { status: 'loading' }, reload];
 }
 
-function CodeLines({ path, content }) {
-  const lines = content.split('\n').length;
-  if (lines > MAX_HIGHLIGHT_LINES) {
+/** One numbered line; `children` is its text, highlighted or plain. */
+function CodeLine({ number, lineProps, children }) {
+  return (
+    <div {...lineProps} className="code-line">
+      <span className="code-no">{number}</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+/**
+ * The file's lines. Memoized, so dragging the drawer's edge (which re-renders the drawer on every
+ * pointer move) does not tokenize the file again. Past `MAX_HIGHLIGHT_LINES` it shows plain text.
+ */
+const CodeLines = memo(function CodeLines({ path, content }) {
+  const plain = useMemo(() => content.split('\n'), [content]);
+  if (plain.length > MAX_HIGHLIGHT_LINES) {
     return (
       <pre className="code-pre" data-highlighted="false">
-        {content.split('\n').map((line, i) => (
-          <div key={i} className="code-line">
-            <span className="code-no">{i + 1}</span>
-            <span>{line}</span>
-          </div>
+        {plain.map((line, i) => (
+          <CodeLine key={i} number={i + 1}>
+            {line}
+          </CodeLine>
         ))}
       </pre>
     );
@@ -56,24 +69,21 @@ function CodeLines({ path, content }) {
       {({ tokens, getLineProps, getTokenProps }) => (
         <pre className="code-pre" data-highlighted="true">
           {tokens.map((line, i) => (
-            <div key={i} {...getLineProps({ line, className: 'code-line' })}>
-              <span className="code-no">{i + 1}</span>
-              <span>
-                {line.map((token, k) => (
-                  <span key={k} {...getTokenProps({ token })} />
-                ))}
-              </span>
-            </div>
+            <CodeLine key={i} number={i + 1} lineProps={getLineProps({ line })}>
+              {line.map((token, k) => (
+                <span key={k} {...getTokenProps({ token })} />
+              ))}
+            </CodeLine>
           ))}
         </pre>
       )}
     </Highlight>
   );
-}
+});
 
 function Body({ file, source, reload }) {
   if (!file) return <p className="code-note">Select a file to view its code.</p>;
-  if (source.status === 'loading' || source.status === 'idle') {
+  if (source.status === 'loading') {
     return (
       <div className="code-skeleton" role="status" aria-label="Loading code">
         {Array.from({ length: 8 }, (_, i) => (

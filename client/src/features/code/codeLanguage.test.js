@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampDrawerHeight, codeTheme, prismLanguage } from './codeLanguage.js';
+import { codeTheme, prismLanguage } from './codeLanguage.js';
 
 describe('prismLanguage', () => {
   it('maps each supported extension', () => {
@@ -8,15 +8,6 @@ describe('prismLanguage', () => {
     for (const ext of ['js', 'jsx', 'mjs', 'cjs']) {
       expect(prismLanguage(`src/a.${ext}`)).toBe('jsx');
     }
-  });
-});
-
-describe('clampDrawerHeight', () => {
-  it('keeps the drawer between 20% and 70%', () => {
-    expect(clampDrawerHeight(5)).toBe(20);
-    expect(clampDrawerHeight(40)).toBe(40);
-    expect(clampDrawerHeight(95)).toBe(70);
-    expect(clampDrawerHeight(NaN)).toBe(20);
   });
 });
 

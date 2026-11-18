@@ -2,8 +2,12 @@ import { create } from 'zustand';
 import { buildGraphIndex } from '../features/graph/graphIndex.js';
 import { computeFocusSet } from '../features/graph/focus.js';
 import { folderChain, wrapperChain } from '../features/graph/visibility.js';
-import { clampDrawerHeight } from '../features/code/codeLanguage.js';
 import { searchFiles } from '../features/search/search.js';
+
+export const MIN_DRAWER_PCT = 20;
+export const MAX_DRAWER_PCT = 70;
+const clampDrawerHeight = (pct) =>
+  Math.min(MAX_DRAWER_PCT, Math.max(MIN_DRAWER_PCT, Number.isFinite(pct) ? pct : MIN_DRAWER_PCT));
 
 /** Workspace state (spec 8.8). `expandedFolders` is replaced, never mutated, so selectors see changes. */
 const initialState = () => ({
