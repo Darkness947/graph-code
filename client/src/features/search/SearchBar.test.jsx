@@ -55,6 +55,13 @@ describe('SearchBar (spec 8.6)', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
   });
 
+  it('selects on Enter without waiting for the debounce', async () => {
+    const { user, input } = setup();
+    await user.type(input, 'main{Enter}');
+    expect(store().selectedNodeId).toBe('f:src/main.ts');
+    expect(input).toHaveValue('');
+  });
+
   it('moves with the arrow keys and selects on click', async () => {
     const { user, input } = setup();
     await user.type(input, 'page');

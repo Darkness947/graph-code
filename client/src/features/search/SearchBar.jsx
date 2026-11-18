@@ -63,9 +63,13 @@ export default function SearchBar() {
     } else if (event.key === 'ArrowUp' && results.length) {
       event.preventDefault();
       setActive((i) => (i - 1 + results.length) % results.length);
-    } else if (event.key === 'Enter' && results.length) {
+    } else if (event.key === 'Enter' && value.trim() !== '') {
       event.preventDefault();
-      choose(results[Math.min(active, results.length - 1)]);
+      // Enter does not wait for the debounce: search for what is typed now.
+      clearTimeout(timer.current);
+      if (value !== query) setSearchQuery(value);
+      const fresh = useWorkspaceStore.getState().search.results;
+      if (fresh.length) choose(fresh[Math.min(active, fresh.length - 1)]);
     }
   };
 
