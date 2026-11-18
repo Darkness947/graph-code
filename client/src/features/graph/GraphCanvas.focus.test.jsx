@@ -108,9 +108,12 @@ describe('GraphCanvas focus mode (spec 8.6 item 8)', () => {
     expect(dimmed.length).toBeLessThan(document.querySelectorAll('.react-flow__edge').length);
   });
 
-  it('ignores a click on a folder', async () => {
+  it('selects a clicked folder without entering focus mode', async () => {
     await renderCanvas([]);
     fireEvent.click(nodeEl('d:src'));
+    expect(store().selectedNodeId).toBe('d:src');
     expect(store().focus.active).toBe(false);
+    expect(nodeEl('d:src')).toHaveClass('is-selected');
+    expect(nodeEl('d:app')).not.toHaveClass('is-dim');
   });
 });

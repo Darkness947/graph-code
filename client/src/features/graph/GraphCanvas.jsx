@@ -121,6 +121,7 @@ function Canvas() {
   const expandFolder = useWorkspaceStore((s) => s.expandFolder);
   const focus = useWorkspaceStore((s) => s.focus);
   const selectFile = useWorkspaceStore((s) => s.selectFile);
+  const selectFolder = useWorkspaceStore((s) => s.selectFolder);
   const clearFocus = useWorkspaceStore((s) => s.clearFocus);
   const setHovered = useWorkspaceStore((s) => s.setHovered);
   const flow = useReactFlow();
@@ -185,7 +186,11 @@ function Canvas() {
               return dim || selected ? { ...n, className: `${dim} ${selected}`.trim() } : n;
             }),
           )
-        : drawn,
+        : drawn.map((n) =>
+            n.id === selectedNodeId && n.type === 'folder'
+              ? copyOnce(nodeCache, n, () => ({ ...n, className: 'is-selected' }))
+              : n,
+          ),
     [drawn, lit, selectedNodeId, nodeCache],
   );
   const shownEdges = useMemo(
@@ -267,8 +272,9 @@ function Canvas() {
   const onNodeClick = useCallback(
     (_event, node) => {
       if (node.type === 'file') selectFile(node.id);
+      else selectFolder(node.id);
     },
-    [selectFile],
+    [selectFile, selectFolder],
   );
 
   const onNodeDoubleClick = useCallback(

@@ -53,6 +53,14 @@ describe('Workspace (spec 8.6)', () => {
     expect(screen.getByRole('combobox', { name: 'Search files' })).toBeInTheDocument();
   });
 
+  it('draws the insights panel and the code drawer handle', async () => {
+    mockApi(graphRoute(() => Promise.resolve(GRAPH)));
+    renderApp('/repos/repo-1');
+    expect(await screen.findByRole('complementary', { name: 'Insights' })).toBeInTheDocument();
+    expect(screen.getByText('Click a file to inspect it.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Code/ })).toBeInTheDocument();
+  });
+
   it('explains a graph that is not ready yet', async () => {
     mockApi(graphRoute(fail(409, 'GRAPH_NOT_READY', "This repository's graph isn't ready yet.")));
     renderApp('/repos/repo-1');
