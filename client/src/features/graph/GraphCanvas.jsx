@@ -84,8 +84,8 @@ function absoluteRect(nodes, id) {
 
 /**
  * Lays out the store's graph and draws it with React Flow (spec 8.6 items 1–7, 10 and 11).
- * Layout runs only when the graph or the expanded folders change; hover is read by each edge
- * from the store and never triggers it.
+ * Layout runs only when the graph or the expanded folders change; hover only filters which
+ * detail edges are drawn (decision D-06) and never triggers it.
  */
 function Canvas() {
   const graph = useWorkspaceStore((s) => s.graph);
@@ -100,9 +100,20 @@ function Canvas() {
     try {
       return { ...layoutGraph(graph, expandedFolders), failed: false };
     } catch {
-      return { nodes: [], edges: [], failed: true };
+      return { nodes: [], edges: [], details: [], failed: true };
     }
   }, [graph, expandedFolders]);
+
+  // At rest only the bundles are drawn; the file-level edges a bundle stands for appear for
+  // the hovered or selected node (decision D-06). This filters a list; it never re-runs layout.
+  const hoveredNodeId = useWorkspaceStore((s) => s.hoveredNodeId);
+  const selectedNodeId = useWorkspaceStore((s) => s.selectedNodeId);
+  const edges = useMemo(() => {
+    const shown = new Set([hoveredNodeId, selectedNodeId].filter(Boolean));
+    if (shown.size === 0) return layout.edges;
+    const extra = layout.details.filter((e) => shown.has(e.source) || shown.has(e.target));
+    return extra.length ? [...layout.edges, ...extra] : layout.edges;
+  }, [layout, hoveredNodeId, selectedNodeId]);
 
   const { nodes, moving, moveNode } = useAnimatedNodes(layout.nodes);
 
@@ -163,7 +174,7 @@ function Canvas() {
     <div className={`gc-canvas${moving ? ' is-moving' : ''}`} data-testid="graph-canvas">
       <ReactFlow
         nodes={nodes}
-        edges={layout.edges}
+        edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         colorMode="dark"

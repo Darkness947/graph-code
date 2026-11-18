@@ -96,6 +96,24 @@ describe('GraphCanvas', () => {
     expect(vi.mocked(layoutModule.layoutGraph).mock.calls.length).toBe(calls);
   });
 
+  it('draws the detail edges of the hovered node only, without running layout again', async () => {
+    // src is open, so index.ts -> src/lib is bundled at rest as index.ts -> src (decision D-06).
+    await renderCanvas(['src']);
+    const calls = vi.mocked(layoutModule.layoutGraph).mock.calls.length;
+    expect(edgeEl('f:index.ts->d:src')).not.toBeNull();
+    expect(edgeEl('f:index.ts->d:src/lib')).toBeNull();
+
+    act(() => store().setHovered('f:index.ts'));
+    expect(edgeEl('f:index.ts->d:src/lib').querySelector('.gc-edge')).toHaveClass(
+      'is-active',
+      'is-detail',
+    );
+
+    act(() => store().setHovered(null));
+    expect(edgeEl('f:index.ts->d:src/lib')).toBeNull();
+    expect(vi.mocked(layoutModule.layoutGraph).mock.calls.length).toBe(calls);
+  });
+
   it('sets the hovered node from the pointer', async () => {
     await renderCanvas();
     fireEvent.mouseEnter(nodeEl('f:index.ts'));

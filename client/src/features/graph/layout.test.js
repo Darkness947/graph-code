@@ -137,7 +137,7 @@ describe('layoutGraph', () => {
   it('expands nothing from an edge whose target is a file', () => {
     const result = layout(SAMPLE, ['src', 'src/lib']);
     // app (collapsed) -> src/lib/utils.ts: aggregated because of the folder, but the target is a file.
-    const edge = result.edges.find((e) => e.id === 'd:app->f:src/lib/utils.ts');
+    const edge = result.details.find((e) => e.id === 'd:app->f:src/lib/utils.ts');
     expect(edge.data).toMatchObject({ aggregated: true, expandPath: null });
   });
 
@@ -184,7 +184,7 @@ describe('layoutGraph', () => {
   });
 
   it('copes with an empty graph', () => {
-    expect(layout(makeGraph([]))).toEqual({ nodes: [], edges: [] });
+    expect(layout(makeGraph([]))).toEqual({ nodes: [], edges: [], details: [] });
   });
 });
 
@@ -206,8 +206,8 @@ describe('edge ports', () => {
   };
 
   it('leaves through the bottom of each tray and enters through the top of each tray', () => {
-    const { points } = result.edges.find((e) => e.id === 'f:app/page.tsx->f:lib/deep/math.ts').data
-      .route;
+    const { points } = result.details.find((e) => e.id === 'f:app/page.tsx->f:lib/deep/math.ts')
+      .data.route;
     const page = abs('f:app/page.tsx');
     const app = abs('d:app');
     const lib = abs('d:lib');
@@ -221,7 +221,7 @@ describe('edge ports', () => {
   });
 
   it('puts the count badge on the stretch between the two trays', () => {
-    const { points, label } = result.edges.find(
+    const { points, label } = result.details.find(
       (e) => e.id === 'f:app/page.tsx->f:lib/deep/math.ts',
     ).data.route;
     const app = abs('d:app');
@@ -281,10 +281,58 @@ describe('edge ports inside a wrapped grid', () => {
   const result = layoutGraph(buildGraphIndex(graph), new Set(['big', 'big/a', 'big/b']));
 
   it('routes through the two ports alone, with the badge between them', () => {
-    const { points, label } = result.edges.find((e) => e.id === 'f:big/a/x.ts->f:big/b/y.ts').data
+    const { points, label } = result.details.find((e) => e.id === 'f:big/a/x.ts->f:big/b/y.ts').data
       .route;
     expect(points).toHaveLength(4);
     expect(label).toBe(1);
     expect(points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
+  });
+});
+
+describe('edge bundles (decision D-06)', () => {
+  // Three files in the open `ctrl` folder import the collapsed `models` folder; `ctrl/a.ts`
+  // also imports its sibling `ctrl/b.ts`.
+  const graph = makeGraph(
+    ['ctrl/a.ts', 'ctrl/b.ts', 'ctrl/c.ts', 'models/m.ts', 'models/n.ts', ...OTHERS],
+    [
+      ['ctrl/a.ts', 'models/m.ts'],
+      ['ctrl/b.ts', 'models/m.ts'],
+      ['ctrl/c.ts', 'models/n.ts'],
+      ['ctrl/a.ts', 'ctrl/b.ts'],
+    ],
+  );
+
+  it('draws one bundle from an open folder to its sibling, carrying every import', () => {
+    const result = layout(graph, ['ctrl']);
+    const bundle = result.edges.find((e) => e.id === 'd:ctrl->d:models');
+    expect(bundle).toMatchObject({ source: 'd:ctrl', target: 'd:models' });
+    expect(bundle.data).toMatchObject({ count: 3, aggregated: true, expandPath: 'models' });
+    expect(bundle.data.detail).toBe(false);
+    expect(
+      result.edges.some((e) => e.source.startsWith('f:ctrl/') && e.target === 'd:models'),
+    ).toBe(false);
+  });
+
+  it('keeps the file-level edges a bundle stands for as details, drawn active', () => {
+    const result = layout(graph, ['ctrl']);
+    expect(result.details.map((e) => e.id).sort()).toEqual([
+      'f:ctrl/a.ts->d:models',
+      'f:ctrl/b.ts->d:models',
+      'f:ctrl/c.ts->d:models',
+    ]);
+    expect(result.details.every((e) => e.data.detail === true)).toBe(true);
+  });
+
+  it('draws an edge between two files in the same tray once, as itself', () => {
+    const result = layout(graph, ['ctrl']);
+    expect(result.edges.filter((e) => e.id === 'f:ctrl/a.ts->f:ctrl/b.ts')).toHaveLength(1);
+    expect(result.details.some((e) => e.id === 'f:ctrl/a.ts->f:ctrl/b.ts')).toBe(false);
+  });
+
+  it('offers no expand on a bundle into a folder that is already open', () => {
+    const result = layout(graph, ['ctrl', 'models']);
+    const bundle = result.edges.find((e) => e.id === 'd:ctrl->d:models');
+    expect(bundle.data).toMatchObject({ count: 3, expandPath: null });
+    expect(bundle.className).toBeUndefined();
   });
 });

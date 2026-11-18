@@ -55,7 +55,8 @@ export const strokeFor = (count) => Math.min(3, 1.25 + Math.log2(count) * 0.5);
 
 /**
  * An import edge, importer -> imported (spec 8.6 items 3 and 4). At rest it is drawn in
- * `--edge-rest`; when either end is hovered it rises to `--edge-active`. Hover is read from the
+ * `--edge-rest`; when either end is hovered it rises to `--edge-active`. A detail edge (one
+ * file-level edge inside a bundle, decision D-06) is drawn only on demand, always active. Hover is read from the
  * store per edge, so hovering never re-runs layout. An aggregated edge carries a count badge;
  * clicking it expands the folder at its target end.
  */
@@ -71,12 +72,16 @@ function AggregateEdge({
   targetPosition,
   data,
 }) {
-  const active = useWorkspaceStore((s) => s.hoveredNodeId === source || s.hoveredNodeId === target);
+  const hovered = useWorkspaceStore(
+    (s) => s.hoveredNodeId === source || s.hoveredNodeId === target,
+  );
+  // A detail edge is only drawn for the hovered or selected node, so it is always active.
+  const active = hovered || data.detail === true;
   const expandFolder = useWorkspaceStore((s) => s.expandFolder);
   const [path, labelX, labelY] = data.route
     ? routedPath(data.route, sourceX, sourceY, targetX, targetY)
     : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
-  const state = active ? ' is-active' : '';
+  const state = `${active ? ' is-active' : ''}${data.detail ? ' is-detail' : ''}`;
   const imports = countOf(data.count, 'import', 'imports');
 
   return (
