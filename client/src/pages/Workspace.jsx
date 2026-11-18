@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getGraph } from '../api/repos.js';
 import MessagePanel from '../components/MessagePanel.jsx';
 import PageSpinner from '../components/PageSpinner.jsx';
+import CodeDrawer from '../features/code/CodeDrawer.jsx';
 import GraphCanvas from '../features/graph/GraphCanvas.jsx';
+import InsightsPanel from '../features/insights/InsightsPanel.jsx';
 import { countOf, formatDate, GENERIC_ERROR } from '../features/repos/messages.js';
 import { handleUnauthenticated } from '../features/repos/useRepositories.js';
 import { useWorkspaceStore } from '../store/workspaceStore.js';
@@ -47,6 +49,7 @@ export default function Workspace() {
   const reset = useWorkspaceStore((s) => s.reset);
   const [state, setState] = useState({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const bodyRef = useRef(null);
 
   useEffect(() => {
     let live = true;
@@ -60,6 +63,8 @@ export default function Workspace() {
           repository: graph.repository,
           files,
           edges: graph.edges.length,
+          unresolved: graph.unresolved,
+          skipped: graph.repository.latestJob?.filesSkipped ?? 0,
         });
       },
       (err) => {
@@ -110,8 +115,14 @@ export default function Workspace() {
   return (
     <div className="workspace">
       <HeaderStrip repository={state.repository} files={state.files} edges={state.edges} />
-      <div className="ws-body">
-        <GraphCanvas key={id} />
+      <div className="ws-body" ref={bodyRef}>
+        <div className="ws-main">
+          <div className="ws-canvas">
+            <GraphCanvas key={id} />
+          </div>
+          <InsightsPanel unresolved={state.unresolved} skippedFiles={state.skipped} />
+        </div>
+        <CodeDrawer repoId={id} containerRef={bodyRef} />
       </div>
     </div>
   );

@@ -783,6 +783,19 @@ h2 {
 
 .ws-body {
   position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ws-main {
+  display: flex;
   flex: 1;
   min-height: 0;
+}
+
+.ws-canvas {
+  flex: 1;
+  min-width: 0;
 }

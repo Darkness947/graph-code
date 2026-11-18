@@ -138,6 +138,29 @@ describe('workspaceStore wrapper folders (decision D-05)', () => {
       expect(state().search).toEqual({ query: '', results: [] });
     });
 
+    it('selects a folder, which ends focus mode', () => {
+      state().selectFile('f:index.ts');
+      state().selectFolder('d:src');
+      expect(state().selectedNodeId).toBe('d:src');
+      expect(state().focus).toEqual({ active: false, nodeIds: [] });
+      state().selectFolder('f:index.ts');
+      expect(state().selectedNodeId).toBe('d:src');
+      state().clearFocus();
+      expect(state().selectedNodeId).toBeNull();
+    });
+
+    it('opens, closes and resizes the code drawer within 20 to 70 percent', () => {
+      expect(state().codeDrawer).toEqual({ open: false, heightPct: 40 });
+      state().openCode();
+      expect(state().codeDrawer.open).toBe(true);
+      state().setCodeHeight(10);
+      expect(state().codeDrawer.heightPct).toBe(20);
+      state().setCodeHeight(90);
+      expect(state().codeDrawer.heightPct).toBe(70);
+      state().closeCode();
+      expect(state().codeDrawer).toEqual({ open: false, heightPct: 70 });
+    });
+
     it('toggles the sidebar', () => {
       state().toggleSidebar();
       expect(state().sidebarCollapsed).toBe(true);
