@@ -133,8 +133,9 @@ export function createGeminiClient({
   now = Date.now,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }) {
-  // The SDK sends the key in a header; it never appears in a URL or a log line.
-  const client = sdk ?? new GoogleGenAI({ apiKey });
+  // The SDK sends the key in a header; it never appears in a URL or a log line. It is built on
+  // first use, so an app that never analyzes (tests, health checks) needs no key.
+  let client = sdk;
 
   /**
    * @param {{ systemInstruction: string, prompt: string, responseSchema: object, requestId?: string }} input
@@ -143,6 +144,7 @@ export function createGeminiClient({
    *   `outcome` and `attempts` set
    */
   async function generateJson({ systemInstruction, prompt, responseSchema, requestId = '-' }) {
+    client ??= new GoogleGenAI({ apiKey });
     const start = now();
     const deadline = start + timeoutMs;
     const request = {

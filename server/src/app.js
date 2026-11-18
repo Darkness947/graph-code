@@ -19,6 +19,12 @@ import { createGraphRouter } from './routes/graph.js';
 import { createGraphRepository } from './services/graph/graphRepository.js';
 import { createGraphQueryService } from './services/graph/graphQueryService.js';
 import { requireUserToken } from './services/auth/tokenCrypto.js';
+import { createAnalyzeRouter } from './routes/analyze.js';
+import { createAnalyzeGraphService } from './services/ai/analyzeGraphService.js';
+import { createAiCacheRepository } from './services/ai/aiCacheRepository.js';
+import { createAuditLogger } from './services/ai/auditLogger.js';
+import { createCodeRetriever } from './services/ai/codeRetriever.js';
+import { createGeminiClient } from './services/ai/geminiClient.js';
 
 /**
  * Builds the Express app (exported for Supertest). Routes are added by later tasks.
@@ -27,7 +33,8 @@ import { requireUserToken } from './services/auth/tokenCrypto.js';
  * @param {{ globalLimit?: { windowMs: number, limit: number }, pool?: import('pg').Pool,
  *   oauth?: ReturnType<typeof createGithubOAuth>,
  *   crypto?: ReturnType<typeof tokenCryptoFromConfig>, github?: ReturnType<typeof createGithubClient>,
- *   enqueue?: (jobId: string) => void, addRepoLimit?: { windowMs: number, limit: number } }} [options] pool and test overrides
+ *   enqueue?: (jobId: string) => void, addRepoLimit?: { windowMs: number, limit: number },
+ *   gemini?: ReturnType<typeof createGeminiClient> }} [options] pool and test overrides
  * @returns {import('express').Express}
  */
 export function createApp(config, options = {}) {
@@ -55,16 +62,30 @@ export function createApp(config, options = {}) {
     const enqueue = options.enqueue ?? (() => {});
     const addRepoLimit = options.addRepoLimit ?? ADD_REPO_LIMIT;
     api.use('/github', requireAuth, createGithubRouter({ pool, crypto, github, repos }));
-    const graph = createGraphQueryService({
+    const graphs = createGraphRepository(pool);
+    const getToken = (userId) => requireUserToken(pool, crypto, userId);
+    const graph = createGraphQueryService({ repos, graphs, github, getToken });
+    const analyze = createAnalyzeGraphService({
       repos,
-      graphs: createGraphRepository(pool),
-      github,
-      getToken: (userId) => requireUserToken(pool, crypto, userId),
+      graphs,
+      cache: createAiCacheRepository(pool),
+      audit: createAuditLogger(pool),
+      retriever: createCodeRetriever(github),
+      gemini:
+        options.gemini ??
+        createGeminiClient({
+          apiKey: config.GEMINI_API_KEY,
+          models: config.GEMINI_MODELS,
+          timeoutMs: config.AI_TIMEOUT_MS,
+          attemptTimeoutMs: config.AI_ATTEMPT_TIMEOUT_MS,
+        }),
+      getToken,
     });
     api.use(
       '/repos',
       requireAuth,
       createGraphRouter({ graph }),
+      createAnalyzeRouter({ analyze }),
       createReposRouter({ pool, crypto, github, enqueue, addRepoLimit, repos }),
     );
     api.use('/jobs', requireAuth, createJobsRouter({ jobs }));
