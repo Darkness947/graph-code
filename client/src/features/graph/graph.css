@@ -597,8 +597,12 @@
 
 .gc-sidebar.is-rail {
   width: 40px;
-  align-items: center;
-  padding-top: 6px;
+}
+
+.gc-sidebar.is-rail .gc-sidebar-head {
+  justify-content: center;
+  padding: 0;
+  border-bottom: 0;
 }
 
 .gc-sidebar-head {

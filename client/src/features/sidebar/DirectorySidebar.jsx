@@ -1,5 +1,5 @@
 import { useReactFlow } from '@xyflow/react';
-import { useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
 import { MOVE_MS } from '../graph/useAnimatedNodes.js';
 import { countOf } from '../repos/messages.js';
@@ -12,17 +12,19 @@ function folderIds(graph) {
   return map;
 }
 
-function Row({ id, depth, ids }) {
-  const graph = useWorkspaceStore((s) => s.graph);
-  const expanded = useWorkspaceStore((s) => s.expandedFolders);
-  const selected = useWorkspaceStore((s) => s.selectedNodeId);
+/**
+ * One tree row. It subscribes only to what it shows (is it selected, is it open), so a selection
+ * or an expand re-renders the rows that changed, not the whole tree.
+ */
+const Row = memo(function Row({ node, graph, depth, ids }) {
+  const isFile = node.type === 'file';
+  const isSelected = useWorkspaceStore((s) => isFile && s.selectedNodeId === node.id);
+  const open = useWorkspaceStore((s) => !isFile && s.expandedFolders.has(node.path));
   const toggleFolder = useWorkspaceStore((s) => s.toggleFolder);
   const expandFolder = useWorkspaceStore((s) => s.expandFolder);
   const selectFile = useWorkspaceStore((s) => s.selectFile);
   const flow = useReactFlow();
   const ref = useRef(null);
-  const node = graph.nodesById.get(id);
-  const isSelected = node.type === 'file' && selected === id;
 
   // The tree follows the canvas: the selected file scrolls into view.
   useEffect(() => {
@@ -31,7 +33,7 @@ function Row({ id, depth, ids }) {
 
   const indent = { paddingLeft: 8 + depth * 14 };
 
-  if (node.type === 'file') {
+  if (isFile) {
     return (
       <li>
         <button
@@ -41,7 +43,7 @@ function Row({ id, depth, ids }) {
           style={indent}
           title={node.path}
           aria-current={isSelected ? 'true' : undefined}
-          onClick={() => selectFile(id)}
+          onClick={() => selectFile(node.id)}
         >
           <i className="bi bi-file-earmark-code" aria-hidden="true" />
           <span className="gc-tree-name">{node.name}</span>
@@ -50,19 +52,18 @@ function Row({ id, depth, ids }) {
     );
   }
 
-  const open = expanded.has(node.path);
   // Opening a folder pans to it (the canvas keeps a folder it just opened in view); a folder that
   // is already open is panned to directly.
   const reveal = () => {
-    if (open) {
-      const drawn = flow.getInternalNode(ids.get(node.path));
-      if (drawn) {
-        const { x, y } = drawn.internals.positionAbsolute;
-        const { width = 0, height = 0 } = drawn.measured ?? {};
-        flow.fitBounds({ x, y, width, height }, { padding: 0.2, maxZoom: 1, duration: MOVE_MS });
-      }
-    } else {
+    if (!open) {
       expandFolder(node.path);
+      return;
+    }
+    const drawn = flow.getInternalNode(ids.get(node.path));
+    if (drawn) {
+      const { x, y } = drawn.internals.positionAbsolute;
+      const { width = 0, height = 0 } = drawn.measured ?? {};
+      flow.fitBounds({ x, y, width, height }, { padding: 0.2, maxZoom: 1, duration: MOVE_MS });
     }
   };
 
@@ -83,17 +84,16 @@ function Row({ id, depth, ids }) {
           <span className="gc-tree-count">{node.metrics?.fileCount ?? 0}</span>
         </button>
       </div>
-      {open && <Children path={node.path} depth={depth + 1} ids={ids} />}
+      {open && <Children graph={graph} path={node.path} depth={depth + 1} ids={ids} />}
     </li>
   );
-}
+});
 
-function Children({ path, depth, ids }) {
-  const graph = useWorkspaceStore((s) => s.graph);
+function Children({ graph, path, depth, ids }) {
   return (
     <ul className="gc-tree-list">
       {(graph.childrenByPath.get(path) ?? []).map((id) => (
-        <Row key={id} id={id} depth={depth} ids={ids} />
+        <Row key={id} node={graph.nodesById.get(id)} graph={graph} depth={depth} ids={ids} />
       ))}
     </ul>
   );
@@ -109,43 +109,37 @@ export default function DirectorySidebar() {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
   const ids = useMemo(() => folderIds(graph), [graph]);
+  const files = useMemo(
+    () => [...graph.nodesById.values()].filter((n) => n.type === 'file').length,
+    [graph],
+  );
 
-  if (collapsed) {
-    return (
-      <aside className="gc-sidebar is-rail" aria-label="Directory">
-        <button
-          type="button"
-          className="gc-sidebar-toggle"
-          aria-label="Show directory"
-          aria-expanded={false}
-          onClick={toggleSidebar}
-        >
-          <i className="bi bi-layout-sidebar" aria-hidden="true" />
-        </button>
-      </aside>
-    );
-  }
-
-  const files = [...graph.nodesById.values()].filter((n) => n.type === 'file').length;
   return (
-    <aside className="gc-sidebar" aria-label="Directory">
+    <aside className={`gc-sidebar${collapsed ? ' is-rail' : ''}`} aria-label="Directory">
       <div className="gc-sidebar-head">
-        <span>
-          Files <span className="gc-tree-count">{countOf(files, 'file', 'files')}</span>
-        </span>
+        {!collapsed && (
+          <span>
+            Files <span className="gc-tree-count">{countOf(files, 'file', 'files')}</span>
+          </span>
+        )}
         <button
           type="button"
           className="gc-sidebar-toggle"
-          aria-label="Hide directory"
-          aria-expanded
+          aria-label={collapsed ? 'Show directory' : 'Hide directory'}
+          aria-expanded={!collapsed}
           onClick={toggleSidebar}
         >
-          <i className="bi bi-layout-sidebar-inset" aria-hidden="true" />
+          <i
+            className={`bi ${collapsed ? 'bi-layout-sidebar' : 'bi-layout-sidebar-inset'}`}
+            aria-hidden="true"
+          />
         </button>
       </div>
-      <nav className="gc-tree" aria-label="Files and folders">
-        <Children path="" depth={0} ids={ids} />
-      </nav>
+      {!collapsed && (
+        <nav className="gc-tree" aria-label="Files and folders">
+          <Children graph={graph} path="" depth={0} ids={ids} />
+        </nav>
+      )}
     </aside>
   );
 }

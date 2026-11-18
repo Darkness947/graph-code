@@ -74,8 +74,7 @@ export function keepInViewMove(rect, { x, y, zoom }, screen) {
 }
 
 /** A node's rectangle in canvas coordinates (layout positions are relative to the parent). */
-function absoluteRect(nodes, id) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+function absoluteRect(nodes, id, byId = new Map(nodes.map((n) => [n.id, n]))) {
   const node = byId.get(id);
   if (!node) return null;
   let x = node.position.x;
@@ -87,16 +86,28 @@ function absoluteRect(nodes, id) {
   return { x, y, width: node.width, height: node.height };
 }
 
+/** `make()` for `item`, computed once per item and kept in `cache`. */
+function copyOnce(cache, item, make) {
+  let out = cache.get(item);
+  if (!out) {
+    out = make();
+    cache.set(item, out);
+  }
+  return out;
+}
+
 /** The smallest rectangle holding all of `rects`. */
 function union(rects) {
-  const x = Math.min(...rects.map((r) => r.x));
-  const y = Math.min(...rects.map((r) => r.y));
-  return {
-    x,
-    y,
-    width: Math.max(...rects.map((r) => r.x + r.width)) - x,
-    height: Math.max(...rects.map((r) => r.y + r.height)) - y,
-  };
+  const box = rects.reduce(
+    (b, r) => ({
+      left: Math.min(b.left, r.x),
+      top: Math.min(b.top, r.y),
+      right: Math.max(b.right, r.x + r.width),
+      bottom: Math.max(b.bottom, r.y + r.height),
+    }),
+    { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
+  );
+  return { x: box.left, y: box.top, width: box.right - box.left, height: box.bottom - box.top };
 }
 
 /**
@@ -160,29 +171,33 @@ function Canvas() {
       parentOf,
     );
   }, [focus, layout, graph, expandedFolders]);
+  // Decorated copies are cached per source object, so while nodes animate only the ones that
+  // moved are copied again, and a hover does not copy every dimmed edge.
+  const nodeCache = useMemo(() => new WeakMap(), [lit, selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const edgeCache = useMemo(() => new WeakMap(), [lit]); // eslint-disable-line react-hooks/exhaustive-deps
   const nodes = useMemo(
     () =>
       lit
-        ? drawn.map((n) => {
-            const cls = [
-              lit.has(n.id) ? '' : 'is-dim',
-              n.id === selectedNodeId ? 'is-selected' : '',
-            ]
-              .filter(Boolean)
-              .join(' ');
-            return cls ? { ...n, className: cls } : n;
-          })
+        ? drawn.map((n) =>
+            copyOnce(nodeCache, n, () => {
+              const dim = lit.has(n.id) ? '' : 'is-dim';
+              const selected = n.id === selectedNodeId ? 'is-selected' : '';
+              return dim || selected ? { ...n, className: `${dim} ${selected}`.trim() } : n;
+            }),
+          )
         : drawn,
-    [drawn, lit, selectedNodeId],
+    [drawn, lit, selectedNodeId, nodeCache],
   );
   const shownEdges = useMemo(
     () =>
       lit
         ? edges.map((e) =>
-            lit.has(e.source) && lit.has(e.target) ? e : { ...e, data: { ...e.data, dim: true } },
+            lit.has(e.source) && lit.has(e.target)
+              ? e
+              : copyOnce(edgeCache, e, () => ({ ...e, data: { ...e.data, dim: true } })),
           )
         : edges,
-    [edges, lit],
+    [edges, lit, edgeCache],
   );
 
   // Dragging: React Flow reports each pointer move as a position change; the node moves in the
@@ -209,9 +224,10 @@ function Canvas() {
       const wasActive = fittedFocus.current.active;
       fittedFocus.current = focus;
       if (focus.active && lit) {
+        const byId = new Map(layout.nodes.map((n) => [n.id, n]));
         const rects = layout.nodes
           .filter((n) => lit.has(n.id) && !(n.type === 'folder' && n.data.expanded))
-          .map((n) => absoluteRect(layout.nodes, n.id));
+          .map((n) => absoluteRect(layout.nodes, n.id, byId));
         if (rects.length) {
           flow.fitBounds(union(rects), { padding: 0.2, maxZoom: 1, duration: MOVE_MS });
         }

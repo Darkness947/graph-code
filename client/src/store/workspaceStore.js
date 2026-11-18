@@ -57,8 +57,17 @@ export const useWorkspaceStore = create((set, get) => ({
     const { graph } = get();
     const node = graph?.nodesById.get(id);
     if (node?.type !== 'file') return;
-    if (node.parentPath) get().expandFolder(node.parentPath);
-    set({ selectedNodeId: id, focus: { active: true, nodeIds: computeFocusSet(graph, id) } });
+    const { expandedFolders } = get();
+    const wanted = node.parentPath
+      ? [...folderChain(node.parentPath), ...wrapperChain(graph, node.parentPath)]
+      : [];
+    set({
+      selectedNodeId: id,
+      focus: { active: true, nodeIds: computeFocusSet(graph, id) },
+      ...(wanted.some((p) => !expandedFolders.has(p))
+        ? { expandedFolders: new Set([...expandedFolders, ...wanted]) }
+        : {}),
+    });
   },
 
   /** Leaves focus mode and clears the selection. */
