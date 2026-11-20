@@ -97,7 +97,7 @@ export default function AiPanel({ repoId, nodeId }) {
 
   return (
     <div className="ai-panel">
-      {(status === 'idle' || status === 'loading') && (
+      {status !== 'error' && (
         <button
           type="button"
           className="btn btn-primary ins-action ai-analyze"

@@ -24,8 +24,7 @@ export default function AiNoticeModal({ show, onHide, onConfirmed }) {
     setError(null);
     try {
       await acknowledgeAiNotice();
-      const { user } = useSessionStore.getState();
-      if (user) useSessionStore.setState({ user: { ...user, aiNoticeAcknowledged: true } });
+      useSessionStore.getState().acknowledgeAiNotice();
       onHide();
       onConfirmed();
     } catch (err) {

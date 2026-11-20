@@ -29,6 +29,12 @@ export const useSessionStore = create((set, get) => ({
     }
   },
 
+  /** Remembers that the user has read the AI notice (after `POST /api/me/ai-notice`). */
+  acknowledgeAiNotice: () => {
+    const { user } = get();
+    if (user) set({ user: { ...user, aiNoticeAcknowledged: true } });
+  },
+
   /** Forgets the user after the server has destroyed the session. */
   clear: () => set({ status: 'anonymous', user: null }),
 }));

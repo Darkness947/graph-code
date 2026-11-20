@@ -16,43 +16,46 @@ export const NOTICE_TEXT =
 export const NOTICE_CONFIRM = 'I understand, analyze';
 
 /**
+ * Each analysis error's wording (spec 8.9) and its calm icon (spec 8.6): a clock for waiting
+ * (quota, timeout, our own rate limit), a plug for a service that couldn't be reached, a warning
+ * for anything else. `RATE_LIMITED` and `GITHUB_UNAVAILABLE` share the dashboard's wording.
+ */
+const AI_ERRORS = {
+  AI_QUOTA_EXCEEDED: {
+    icon: 'bi-clock',
+    message: () => 'AI analysis is temporarily unavailable — try again in a moment.',
+  },
+  AI_TIMEOUT: {
+    icon: 'bi-clock',
+    message: () => 'The AI service took too long to respond. Try again.',
+  },
+  AI_UNREACHABLE: {
+    icon: 'bi-plug',
+    message: () => "Couldn't reach the AI service. Check your connection and try again.",
+  },
+  AI_MALFORMED: {
+    icon: 'bi-exclamation-triangle',
+    message: () => "Couldn't generate a reliable analysis for this file. Try again.",
+  },
+  RATE_LIMITED: {
+    icon: 'bi-clock',
+    message: (retryAfterSeconds) => addErrorMessage({ code: 'RATE_LIMITED', retryAfterSeconds }),
+  },
+  GITHUB_UNAVAILABLE: {
+    icon: 'bi-plug',
+    message: () => addErrorMessage({ code: 'GITHUB_UNAVAILABLE' }),
+  },
+};
+const OTHER_ERROR = { icon: 'bi-exclamation-triangle', message: () => GENERIC_ERROR };
+
+/**
  * The message for a failed analysis (spec 8.9).
  * @param {string | null} code
  * @param {number | undefined} [retryAfterSeconds] for `RATE_LIMITED`
  */
-export function aiErrorMessage(code, retryAfterSeconds) {
-  switch (code) {
-    case 'AI_QUOTA_EXCEEDED':
-      return 'AI analysis is temporarily unavailable — try again in a moment.';
-    case 'AI_TIMEOUT':
-      return 'The AI service took too long to respond. Try again.';
-    case 'AI_UNREACHABLE':
-      return "Couldn't reach the AI service. Check your connection and try again.";
-    case 'AI_MALFORMED':
-      return "Couldn't generate a reliable analysis for this file. Try again.";
-    case 'RATE_LIMITED':
-    case 'GITHUB_UNAVAILABLE':
-      return addErrorMessage({ code, retryAfterSeconds });
-    default:
-      return GENERIC_ERROR;
-  }
-}
+export const aiErrorMessage = (code, retryAfterSeconds) =>
+  (Object.hasOwn(AI_ERRORS, code) ? AI_ERRORS[code] : OTHER_ERROR).message(retryAfterSeconds);
 
-/**
- * A calm icon per failure (spec 8.6): a clock for waiting (quota, timeout, our own rate limit),
- * a plug for a service that couldn't be reached, a warning for anything else.
- * @param {string | null} code
- */
-export function aiErrorIcon(code) {
-  switch (code) {
-    case 'AI_QUOTA_EXCEEDED':
-    case 'AI_TIMEOUT':
-    case 'RATE_LIMITED':
-      return 'bi-clock';
-    case 'AI_UNREACHABLE':
-    case 'GITHUB_UNAVAILABLE':
-      return 'bi-plug';
-    default:
-      return 'bi-exclamation-triangle';
-  }
-}
+/** @param {string | null} code */
+export const aiErrorIcon = (code) =>
+  (Object.hasOwn(AI_ERRORS, code) ? AI_ERRORS[code] : OTHER_ERROR).icon;

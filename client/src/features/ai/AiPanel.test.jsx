@@ -119,6 +119,8 @@ describe('AiPanel (spec 8.6)', () => {
       expect(within(section).getByText('Calls format() directly.')).toHaveClass('ai-reason');
       expect(within(section).getByText(DISCLAIMER)).toBeVisible();
       expect(within(section).queryByText(/were removed because/)).toBeNull();
+      // The file's Analyze button stays (spec 8.6 "File selected").
+      expect(screen.getByRole('button', ANALYZE)).toBeEnabled();
     });
 
     it('labels a cached result and notes removed files', async () => {
@@ -219,6 +221,7 @@ describe('AiPanel (spec 8.6)', () => {
       expect(alert.querySelector('i')).toHaveClass(icon);
       expect(alert.querySelector('.bi-check-circle-fill')).toBeNull();
       expect(within(alert).getByRole('button', { name: 'Try again' })).toBeEnabled();
+      expect(screen.queryByRole('button', ANALYZE)).toBeNull();
       expect(screen.queryByText(NO_DEPENDENTS)).toBeNull();
     });
 
