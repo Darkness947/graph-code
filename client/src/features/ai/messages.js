@@ -1,5 +1,5 @@
 /** Wording for the AI panel (spec 8.6 and 8.9). Use exactly; do not paraphrase. */
-import { GENERIC_ERROR } from '../repos/messages.js';
+import { addErrorMessage, GENERIC_ERROR } from '../repos/messages.js';
 
 export const ANALYZE = 'Analyze change impact (AI)';
 export const ANALYZING = 'Analyzing…';
@@ -22,8 +22,6 @@ export const NOTICE_CONFIRM = 'I understand, analyze';
  */
 export function aiErrorMessage(code, retryAfterSeconds) {
   switch (code) {
-    case 'RATE_LIMITED':
-      return `You're doing that too often. Try again in ${retryAfterSeconds ?? 60} seconds.`;
     case 'AI_QUOTA_EXCEEDED':
       return 'AI analysis is temporarily unavailable — try again in a moment.';
     case 'AI_TIMEOUT':
@@ -32,8 +30,9 @@ export function aiErrorMessage(code, retryAfterSeconds) {
       return "Couldn't reach the AI service. Check your connection and try again.";
     case 'AI_MALFORMED':
       return "Couldn't generate a reliable analysis for this file. Try again.";
+    case 'RATE_LIMITED':
     case 'GITHUB_UNAVAILABLE':
-      return "GitHub isn't responding right now. Try again in a moment.";
+      return addErrorMessage({ code, retryAfterSeconds });
     default:
       return GENERIC_ERROR;
   }

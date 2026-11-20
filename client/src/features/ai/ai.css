@@ -70,7 +70,8 @@
   font-weight: 600;
 }
 
-.ai-badge {
+.ai-badge,
+.ai-level {
   padding: 0 6px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -110,11 +111,6 @@
 
 .ai-level {
   flex: none;
-  padding: 0 6px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 11px;
 }
 
 .ai-level-high {
@@ -143,20 +139,23 @@
 /* ---- Canvas: AI extension ---------------------------------------------------------- */
 
 /* AI extension (spec 8.6 item 9): risk borders on files, red edges to high-risk files. */
+.gc-canvas .react-flow__node.risk-high > .gc-file,
+.gc-canvas .react-flow__node.risk-medium > .gc-file,
+.gc-canvas .react-flow__node.risk-low > .gc-file {
+  border-width: 2px;
+}
+
 .gc-canvas .react-flow__node.risk-high > .gc-file {
   border-color: var(--risk-high);
-  border-width: 2px;
 }
 
 .gc-canvas .react-flow__node.risk-medium > .gc-file {
   border-color: var(--risk-medium);
-  border-width: 2px;
 }
 
 .gc-canvas .react-flow__node.risk-low > .gc-file {
   border-style: dashed;
   border-color: var(--risk-low);
-  border-width: 2px;
 }
 
 .gc-canvas .react-flow__edge-path.gc-edge.is-risk-high {

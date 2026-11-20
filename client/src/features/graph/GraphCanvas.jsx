@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import SearchBar from '../search/SearchBar.jsx';
 import DirectorySidebar from '../sidebar/DirectorySidebar.jsx';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
-import { aiHighlight, selectedAiResult } from '../ai/aiHighlight.js';
+import { aiHighlight, isHighRiskEdge, selectedAiResult } from '../ai/aiHighlight.js';
 import AggregateEdge from './AggregateEdge.jsx';
 import CanvasErrorBoundary from './CanvasErrorBoundary.jsx';
 import FileNode from './FileNode.jsx';
@@ -207,11 +207,8 @@ function Canvas() {
   );
   const shownEdges = useMemo(() => {
     if (!lit) return edges;
-    const isRisky = (e) =>
-      (e.source === selectedNodeId && riskLevels.get(e.target) === 'high') ||
-      (e.target === selectedNodeId && riskLevels.get(e.source) === 'high');
     return edges.map((e) => {
-      if (isRisky(e))
+      if (isHighRiskEdge(e, selectedNodeId, riskLevels))
         return copyOnce(edgeCache, e, () => ({ ...e, data: { ...e.data, risk: 'high' } }));
       if (lit.has(e.source) && lit.has(e.target)) return e;
       return copyOnce(edgeCache, e, () => ({ ...e, data: { ...e.data, dim: true } }));

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SAMPLE } from '../../../test/graphFixture.js';
 import { buildGraphIndex } from '../graph/graphIndex.js';
-import { aiHighlight, analysisInFlight, selectedAiResult } from './aiHighlight.js';
+import { fileIdByPath } from '../graph/graphIndex.js';
+import { aiHighlight, analysisInFlight, isHighRiskEdge, selectedAiResult } from './aiHighlight.js';
 
 const index = buildGraphIndex(SAMPLE);
 
@@ -54,5 +55,23 @@ describe('aiHighlight (spec 8.6 item 9)', () => {
     expect(selectedAiResult({ ...state, selectedNodeId: 'b' })).toBeNull();
     expect(analysisInFlight(state)).toBe(false);
     expect(analysisInFlight({ aiByNodeId: { c: { status: 'loading' } } })).toBe(true);
+  });
+
+  it('marks only edges between the target and a high-risk file, in either direction', () => {
+    const levels = new Map([
+      ['hi', 'high'],
+      ['mid', 'medium'],
+    ]);
+    expect(isHighRiskEdge({ source: 'hi', target: 't' }, 't', levels)).toBe(true);
+    expect(isHighRiskEdge({ source: 't', target: 'hi' }, 't', levels)).toBe(true);
+    expect(isHighRiskEdge({ source: 'mid', target: 't' }, 't', levels)).toBe(false);
+    expect(isHighRiskEdge({ source: 'hi', target: 'x' }, 't', levels)).toBe(false);
+  });
+
+  it('builds the path lookup once per index, files only', () => {
+    const map = fileIdByPath(index);
+    expect(fileIdByPath(index)).toBe(map);
+    expect(map.get('src/lib/utils.ts')).toBe('f:src/lib/utils.ts');
+    expect(map.has('src')).toBe(false);
   });
 });

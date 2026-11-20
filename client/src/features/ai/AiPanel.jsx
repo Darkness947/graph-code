@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
+import { fileIdByPath } from '../graph/graphIndex.js';
 import { useSessionStore } from '../auth/useSession.js';
 import { analysisInFlight } from './aiHighlight.js';
 import AiNoticeModal from './AiNoticeModal.jsx';
@@ -49,11 +50,7 @@ function AiResult({ result }) {
   const graph = useWorkspaceStore((s) => s.graph);
   const selectFile = useWorkspaceStore((s) => s.selectFile);
   const [showAll, setShowAll] = useState(false);
-  const idByPath = useMemo(() => {
-    const map = new Map();
-    for (const n of graph.nodesById.values()) if (n.type === 'file') map.set(n.path, n.id);
-    return map;
-  }, [graph]);
+  const idByPath = fileIdByPath(graph);
   const risks = showAll ? result.risks : result.risks.slice(0, CARD_LIMIT);
   const hidden = result.risks.length - risks.length;
 
@@ -117,13 +114,15 @@ export default function AiPanel({ repoId, nodeId }) {
           )}
         </button>
       )}
-      {status === 'success' && entry.result.noDependents && (
-        <div className="ai-state ai-safe">
-          <i className="bi bi-check-circle-fill" aria-hidden="true" />
-          <p>{NO_DEPENDENTS}</p>
-        </div>
-      )}
-      {status === 'success' && !entry.result.noDependents && <AiResult result={entry.result} />}
+      {status === 'success' &&
+        (entry.result.noDependents ? (
+          <div className="ai-state ai-safe">
+            <i className="bi bi-check-circle-fill" aria-hidden="true" />
+            <p>{NO_DEPENDENTS}</p>
+          </div>
+        ) : (
+          <AiResult result={entry.result} />
+        ))}
       {status === 'error' && (
         <div className="ai-state ai-error" role="alert">
           <i className={`bi ${aiErrorIcon(entry.errorCode)}`} aria-hidden="true" />

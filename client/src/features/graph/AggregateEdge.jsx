@@ -82,7 +82,15 @@ function AggregateEdge({
   const [path, labelX, labelY] = data.route
     ? routedPath(data.route, sourceX, sourceY, targetX, targetY)
     : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
-  const state = `${active ? ' is-active' : ''}${data.detail ? ' is-detail' : ''}${data.dim ? ' is-dim' : ''}${data.risk === 'high' ? ' is-risk-high' : ''}`;
+  const state = [
+    '', // a leading space, so the classes append to `gc-edge`
+    active && 'is-active',
+    data.detail && 'is-detail',
+    data.dim && 'is-dim',
+    data.risk && `is-risk-${data.risk}`,
+  ]
+    .filter((c) => typeof c === 'string')
+    .join(' ');
   const imports = countOf(data.count, 'import', 'imports');
 
   return (

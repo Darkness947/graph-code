@@ -38,3 +38,21 @@ export function buildGraphIndex(graph) {
 
   return { nodesById, childrenByPath, edges: graph.edges };
 }
+
+const fileIdsByIndex = new WeakMap();
+
+/**
+ * `Map<path, id>` of the index's files, built once per index. Kept beside the index rather than
+ * in it, so the spec 8.8 `graph` shape stays as defined.
+ * @param {{ nodesById: Map<string, any> }} index
+ * @returns {Map<string, string>}
+ */
+export function fileIdByPath(index) {
+  let map = fileIdsByIndex.get(index);
+  if (!map) {
+    map = new Map();
+    for (const n of index.nodesById.values()) if (n.type === 'file') map.set(n.path, n.id);
+    fileIdsByIndex.set(index, map);
+  }
+  return map;
+}

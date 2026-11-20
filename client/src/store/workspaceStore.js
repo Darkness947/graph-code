@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { aiHighlight } from '../features/ai/aiHighlight.js';
+import { aiHighlight, successResult } from '../features/ai/aiHighlight.js';
 import { buildGraphIndex } from '../features/graph/graphIndex.js';
 import { computeFocusSet } from '../features/graph/focus.js';
 import { folderChain, wrapperChain } from '../features/graph/visibility.js';
@@ -33,8 +33,7 @@ const foldersToShow = (graph, folder) =>
  */
 function focusOn(graph, aiByNodeId, expandedFolders, id) {
   const node = graph.nodesById.get(id);
-  const entry = aiByNodeId[id];
-  const ai = aiHighlight(graph, entry?.status === 'success' ? entry.result : null);
+  const ai = aiHighlight(graph, successResult(aiByNodeId[id]));
   const nodeIds = computeFocusSet(graph, id);
   const lit = new Set(nodeIds);
   for (const riskId of ai.levels.keys()) if (!lit.has(riskId)) nodeIds.push(riskId);
