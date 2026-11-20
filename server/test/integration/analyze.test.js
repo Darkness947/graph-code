@@ -22,6 +22,19 @@ const config = {
   AI_ATTEMPT_TIMEOUT_MS: 12000,
 };
 const SHA = 'd'.repeat(40);
+const ROOMY = { windowMs: 60_000, limit: 1000 };
+const RATE_LIMITED_MESSAGE = /^You're doing that too often\. Try again in \d+ seconds\.$/;
+
+/** A promise with its resolve and reject exposed, to hold Gemini mid-call. */
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 const oauth = {
   authorizeUrl: (state) => `https://github.com/login/oauth/authorize?state=${state}`,
@@ -147,7 +160,8 @@ describe.skipIf(!hasTestDb)('POST /api/repos/:id/analyze (integration)', () => {
 
   beforeAll(async () => {
     pool = await resetTestDatabase();
-    app = createApp(config, { pool, oauth, crypto, github, gemini });
+    // A generous analyze limit: these tests send many requests per minute from one user.
+    app = createApp(config, { pool, oauth, crypto, github, gemini, analyzeLimit: ROOMY });
     graphs = createGraphRepository(pool);
     cookieA = await signIn(app, oauth, 401);
     cookieB = await signIn(app, oauth, 402);
@@ -437,6 +451,107 @@ describe.skipIf(!hasTestDb)('POST /api/repos/:id/analyze (integration)', () => {
       const res = await analyze(cookieA, repoId, ids.utils);
       expect(res.status).toBe(200);
       expect(gemini.generateJson.mock.calls[0][0].prompt).not.toContain('--- file:');
+    });
+  });
+
+  describe('rate limits and the in-flight lock (spec 7.1)', () => {
+    /** Starts a request now and resolves with its response. */
+    const start = (cookie, repoId, nodeId) => analyze(cookie, repoId, nodeId).then((r) => r);
+
+    it('limits analyses per user per window (429 RATE_LIMITED)', async () => {
+      const limited = createApp(config, {
+        pool,
+        oauth,
+        crypto,
+        github,
+        gemini,
+        analyzeLimit: { windowMs: 60_000, limit: 2 },
+      });
+      const id = randomUUID();
+      const send = (cookie) =>
+        request(limited)
+          .post(`/api/repos/${id}/analyze`)
+          .set('Cookie', cookie)
+          .send({ mode: 'blast_radius', nodeId: 'nope' });
+      expect((await send(cookieA)).status).toBe(400);
+      expect((await send(cookieA)).status).toBe(400);
+      const res = await send(cookieA);
+      expect(res.status).toBe(429);
+      expect(res.body.error.code).toBe('RATE_LIMITED');
+      expect(res.body.error.retryAfterSeconds).toBeGreaterThan(0);
+      expect(res.body.error.message).toMatch(RATE_LIMITED_MESSAGE);
+      // Keyed by user: another user still has their own allowance.
+      expect((await send(cookieB)).status).toBe(400);
+    });
+
+    it('refuses a second concurrent analysis from the same user, then frees the slot', async () => {
+      const repoId = await insertRepo(userA, 'busy');
+      const ids = await seed(repoId);
+      const held = deferred();
+      gemini.generateJson.mockReturnValueOnce(held.promise);
+
+      const first = start(cookieA, repoId, ids.utils);
+      await vi.waitFor(() => expect(gemini.generateJson).toHaveBeenCalledTimes(1));
+      const second = await analyze(cookieA, repoId, ids.app);
+      expect(second.status).toBe(429);
+      expect(second.body.error.code).toBe('RATE_LIMITED');
+      expect(second.body.error.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+      expect(second.body.error.retryAfterSeconds).toBeLessThanOrEqual(20);
+      expect(second.body.error.message).toMatch(RATE_LIMITED_MESSAGE);
+
+      held.resolve(answer(GOOD_RISKS));
+      expect((await first).status).toBe(200);
+      expect(gemini.generateJson).toHaveBeenCalledTimes(1);
+      // The refused request is not an analysis, so only the first one is audited.
+      expect(await auditRows(repoId)).toHaveLength(1);
+
+      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
+      expect((await analyze(cookieA, repoId, ids.app)).status).toBe(200);
+    });
+
+    it('frees the slot after a failed analysis', async () => {
+      const repoId = await insertRepo(userA, 'fails');
+      const ids = await seed(repoId);
+      gemini.generateJson.mockRejectedValueOnce(finalError(['quota', 'quota', 'quota'], false, 3));
+      expect((await analyze(cookieA, repoId, ids.utils)).status).toBe(429);
+      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
+      expect((await analyze(cookieA, repoId, ids.utils)).status).toBe(200);
+    });
+
+    it("does not block another user's analysis", async () => {
+      const repoA = await insertRepo(userA, 'a-busy');
+      const idsA = await seed(repoA);
+      const repoB = await insertRepo(userB, 'b-free');
+      const idsB = await seed(repoB);
+      const held = deferred();
+      gemini.generateJson.mockReturnValueOnce(held.promise);
+
+      const first = start(cookieA, repoA, idsA.utils);
+      await vi.waitFor(() => expect(gemini.generateJson).toHaveBeenCalledTimes(1));
+      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
+      expect((await analyze(cookieB, repoB, idsB.utils)).status).toBe(200);
+
+      held.resolve(answer(GOOD_RISKS));
+      expect((await first).status).toBe(200);
+    });
+
+    it('never takes the slot for a request that fails validation or access', async () => {
+      const repoId = await insertRepo(userA, 'checks');
+      const ids = await seed(repoId);
+      const held = deferred();
+      gemini.generateJson.mockReturnValueOnce(held.promise);
+
+      const first = start(cookieA, repoId, ids.utils);
+      await vi.waitFor(() => expect(gemini.generateJson).toHaveBeenCalledTimes(1));
+      // Validation runs before the lock, so a bad body is still a 400, not a 429.
+      expect((await analyze(cookieA, repoId, 'nope')).status).toBe(400);
+      held.resolve(answer(GOOD_RISKS));
+      expect((await first).status).toBe(200);
+
+      // A 404 releases the slot like any other outcome.
+      expect((await analyze(cookieA, repoId, randomUUID())).status).toBe(404);
+      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
+      expect((await analyze(cookieA, repoId, ids.app)).status).toBe(200);
     });
   });
 });
