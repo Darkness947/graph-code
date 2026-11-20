@@ -22,6 +22,8 @@ const config = {
   AI_ATTEMPT_TIMEOUT_MS: 12000,
 };
 const SHA = 'd'.repeat(40);
+const ROOMY = { windowMs: 60_000, limit: 1000 };
+const RATE_LIMITED_MESSAGE = /^You're doing that too often\. Try again in \d+ seconds\.$/;
 
 const oauth = {
   authorizeUrl: (state) => `https://github.com/login/oauth/authorize?state=${state}`,
@@ -147,7 +149,8 @@ describe.skipIf(!hasTestDb)('POST /api/repos/:id/analyze (integration)', () => {
 
   beforeAll(async () => {
     pool = await resetTestDatabase();
-    app = createApp(config, { pool, oauth, crypto, github, gemini });
+    // A generous analyze limit: these tests send many requests per minute from one user.
+    app = createApp(config, { pool, oauth, crypto, github, gemini, analyzeLimit: ROOMY });
     graphs = createGraphRepository(pool);
     cookieA = await signIn(app, oauth, 401);
     cookieB = await signIn(app, oauth, 402);
@@ -437,6 +440,97 @@ describe.skipIf(!hasTestDb)('POST /api/repos/:id/analyze (integration)', () => {
       const res = await analyze(cookieA, repoId, ids.utils);
       expect(res.status).toBe(200);
       expect(gemini.generateJson.mock.calls[0][0].prompt).not.toContain('--- file:');
+    });
+  });
+
+  describe('rate limits and the in-flight lock (spec 7.1)', () => {
+    /**
+     * Starts an analysis of `src/lib/utils.ts` for a new repository of `userId` and holds it
+     * inside Gemini. Resolves once Gemini has been called, so the lock is held.
+     */
+    async function holdFirstAnalysis(cookie, userId, name) {
+      const repoId = await insertRepo(userId, name);
+      const ids = await seed(repoId);
+      const gate = Promise.withResolvers();
+      gemini.generateJson.mockReturnValueOnce(gate.promise);
+      // `.then` starts the supertest request now instead of when it is awaited.
+      const response = analyze(cookie, repoId, ids.utils).then((r) => r);
+      await vi.waitFor(() => expect(gemini.generateJson).toHaveBeenCalled());
+      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
+      return {
+        repoId,
+        ids,
+        finish: async () => {
+          gate.resolve(answer(GOOD_RISKS));
+          expect((await response).status).toBe(200);
+        },
+      };
+    }
+
+    it('limits analyses per user per window (429 RATE_LIMITED)', async () => {
+      const limited = createApp(config, {
+        pool,
+        oauth,
+        crypto,
+        github,
+        gemini,
+        analyzeLimit: { windowMs: 60_000, limit: 2 },
+      });
+      const id = randomUUID();
+      const send = (cookie) =>
+        request(limited)
+          .post(`/api/repos/${id}/analyze`)
+          .set('Cookie', cookie)
+          .send({ mode: 'blast_radius', nodeId: 'nope' });
+      expect((await send(cookieA)).status).toBe(400);
+      expect((await send(cookieA)).status).toBe(400);
+      const res = await send(cookieA);
+      expect(res.status).toBe(429);
+      expect(res.body.error.code).toBe('RATE_LIMITED');
+      expect(res.body.error.retryAfterSeconds).toBeGreaterThan(0);
+      expect(res.body.error.message).toMatch(RATE_LIMITED_MESSAGE);
+      // Keyed by user: another user still has their own allowance.
+      expect((await send(cookieB)).status).toBe(400);
+    });
+
+    it('refuses a second concurrent analysis from the same user, then frees the slot', async () => {
+      const first = await holdFirstAnalysis(cookieA, userA, 'busy');
+      const second = await analyze(cookieA, first.repoId, first.ids.app);
+      expect(second.status).toBe(429);
+      expect(second.body.error.code).toBe('RATE_LIMITED');
+      expect(second.body.error.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+      expect(second.body.error.retryAfterSeconds).toBeLessThanOrEqual(20);
+      expect(second.body.error.message).toMatch(RATE_LIMITED_MESSAGE);
+
+      await first.finish();
+      expect(gemini.generateJson).toHaveBeenCalledTimes(1);
+      // The refused request is not an analysis, so only the first one is audited.
+      expect(await auditRows(first.repoId)).toHaveLength(1);
+      expect((await analyze(cookieA, first.repoId, first.ids.app)).status).toBe(200);
+    });
+
+    it('frees the slot after a failed analysis and after a 404', async () => {
+      const repoId = await insertRepo(userA, 'fails');
+      const ids = await seed(repoId);
+      gemini.generateJson.mockRejectedValueOnce(finalError(['quota', 'quota', 'quota'], false, 3));
+      expect((await analyze(cookieA, repoId, ids.utils)).status).toBe(429);
+      expect((await analyze(cookieA, repoId, randomUUID())).status).toBe(404);
+      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
+      expect((await analyze(cookieA, repoId, ids.utils)).status).toBe(200);
+    });
+
+    it("does not block another user's analysis", async () => {
+      const first = await holdFirstAnalysis(cookieA, userA, 'a-busy');
+      const repoB = await insertRepo(userB, 'b-free');
+      const idsB = await seed(repoB);
+      expect((await analyze(cookieB, repoB, idsB.utils)).status).toBe(200);
+      await first.finish();
+    });
+
+    it('validates before taking the slot, so a bad body is a 400 even while busy', async () => {
+      const first = await holdFirstAnalysis(cookieA, userA, 'checks');
+      expect((await analyze(cookieA, first.repoId, 'nope')).status).toBe(400);
+      await first.finish();
     });
   });
 });

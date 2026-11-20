@@ -9,7 +9,14 @@ import { validateRequest, uuidParam, repoInputBody } from '../../src/middleware/
 import { AppError } from '../../src/errors/AppError.js';
 import { ERROR_STATUS } from '../../src/errors/codes.js';
 import { cookieOptions } from '../../src/middleware/session.js';
-import { rateLimitKey, GLOBAL_LIMIT, ADD_REPO_LIMIT } from '../../src/middleware/rateLimits.js';
+import {
+  rateLimitKey,
+  createInFlightLock,
+  STALE_HOLD_MS,
+  GLOBAL_LIMIT,
+  ADD_REPO_LIMIT,
+  ANALYZE_LIMIT,
+} from '../../src/middleware/rateLimits.js';
 
 const config = {
   NODE_ENV: 'test',
@@ -114,6 +121,10 @@ describe('rate limiting', () => {
 
   it('allows 5 repository additions per 10 minutes (spec 7.1)', () => {
     expect(ADD_REPO_LIMIT).toEqual({ windowMs: 10 * 60 * 1000, limit: 5 });
+  });
+
+  it('allows 10 analyses per minute (spec 7.1)', () => {
+    expect(ANALYZE_LIMIT).toEqual({ windowMs: 60 * 1000, limit: 10 });
   });
 
   it('keys by user ID when signed in, otherwise by IP', () => {
@@ -301,5 +312,84 @@ describe('validateRequest', () => {
     const res = await request(app).post('/named').send({ name: 'x' });
     expect(res.status).toBe(400);
     expect(JSON.stringify(res.body)).not.toContain('"x"');
+  });
+});
+
+describe('in-flight lock', () => {
+  afterEach(() => vi.useRealTimers());
+
+  /** Holds `key` until the returned `finish` is called; resolves with the run's promise. */
+  function hold(lock, key) {
+    const gate = Promise.withResolvers();
+    const done = lock.run(key, () => gate.promise);
+    return { done, finish: gate.resolve, fail: gate.reject };
+  }
+
+  it('refuses a second run for the same key until the first settles', async () => {
+    const lock = createInFlightLock({ holdMs: 20_000 });
+    const first = hold(lock, 'u-1');
+    const fn = vi.fn();
+    await expect(lock.run('u-1', fn)).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+      extras: { retryAfterSeconds: 20 },
+      message: "You're doing that too often. Try again in 20 seconds.",
+    });
+    expect(fn).not.toHaveBeenCalled();
+    first.finish('ok');
+    await expect(first.done).resolves.toBe('ok');
+    await expect(lock.run('u-1', async () => 'again')).resolves.toBe('again');
+  });
+
+  it('releases the key when the run fails', async () => {
+    const lock = createInFlightLock({ holdMs: 20_000 });
+    const first = hold(lock, 'u-1');
+    first.fail(new Error('boom'));
+    await expect(first.done).rejects.toThrow('boom');
+    await expect(lock.run('u-1', async () => 'next')).resolves.toBe('next');
+  });
+
+  it('keeps keys independent', async () => {
+    const lock = createInFlightLock({ holdMs: 20_000 });
+    const first = hold(lock, 'u-1');
+    await expect(lock.run('u-2', async () => 'other')).resolves.toBe('other');
+    first.finish();
+    await first.done;
+  });
+
+  it('counts retryAfterSeconds down to the end of the hold, never below 1', async () => {
+    vi.useFakeTimers();
+    const lock = createInFlightLock({ holdMs: 20_000 });
+    const first = hold(lock, 'u-1');
+    vi.advanceTimersByTime(7_500);
+    await expect(lock.run('u-1', vi.fn())).rejects.toMatchObject({
+      extras: { retryAfterSeconds: 13 },
+    });
+    vi.advanceTimersByTime(60_000);
+    await expect(lock.run('u-1', vi.fn())).rejects.toMatchObject({
+      extras: { retryAfterSeconds: 1 },
+    });
+    first.finish();
+    await first.done;
+  });
+
+  it('frees a hold that never settled after staleMs, and the late run keeps the new hold', async () => {
+    vi.useFakeTimers();
+    const lock = createInFlightLock({ holdMs: 20_000, staleMs: 120_000 });
+    const hung = hold(lock, 'u-1');
+    vi.advanceTimersByTime(119_000);
+    await expect(lock.run('u-1', vi.fn())).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    vi.advanceTimersByTime(1_000);
+    const fresh = hold(lock, 'u-1');
+    hung.finish();
+    await hung.done;
+    // The stale run settling must not release the fresh hold.
+    await expect(lock.run('u-1', vi.fn())).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    fresh.finish();
+    await fresh.done;
+    await expect(lock.run('u-1', async () => 'free')).resolves.toBe('free');
+  });
+
+  it('frees stale holds after two minutes by default', () => {
+    expect(STALE_HOLD_MS).toBe(2 * 60 * 1000);
   });
 });
