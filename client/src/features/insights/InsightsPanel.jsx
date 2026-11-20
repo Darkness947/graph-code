@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
+import AiPanel from '../ai/AiPanel.jsx';
 import { countOf, SKIPPED_FILES } from '../repos/messages.js';
 
 export const NO_EDGES = 'No internal dependencies were found between the analyzed files.';
@@ -103,7 +104,7 @@ function RepositoryFacts({ files, edges, unresolved, skipped }) {
   );
 }
 
-function FileDetails({ node }) {
+function FileDetails({ node, repoId }) {
   const graph = useWorkspaceStore((s) => s.graph);
   const selectFile = useWorkspaceStore((s) => s.selectFile);
   const openCode = useWorkspaceStore((s) => s.openCode);
@@ -128,6 +129,7 @@ function FileDetails({ node }) {
       <button type="button" className="btn btn-outline-secondary ins-action" onClick={openCode}>
         View code
       </button>
+      <AiPanel repoId={repoId} nodeId={node.id} />
     </>
   );
 }
@@ -154,10 +156,10 @@ function FolderDetails({ node }) {
 /**
  * The insights panel (spec 8.6): what is known about the selection without AI. Nothing selected
  * shows the repository's facts; a file shows its size, imports and importers; a folder shows its
- * file count. The AI states belong to the AI panel (T3.7).
- * @param {{ unresolved: { count: number, items: object[] }, skippedFiles?: number }} props
+ * file count. A file also gets the AI panel (Analyze and its states).
+ * @param {{ repoId: string, unresolved: { count: number, items: object[] }, skippedFiles?: number }} props
  */
-export default function InsightsPanel({ unresolved, skippedFiles = 0 }) {
+export default function InsightsPanel({ repoId, unresolved, skippedFiles = 0 }) {
   const graph = useWorkspaceStore((s) => s.graph);
   const selected = useWorkspaceStore((s) => s.graph?.nodesById.get(s.selectedNodeId));
   const files = useMemo(
@@ -167,7 +169,9 @@ export default function InsightsPanel({ unresolved, skippedFiles = 0 }) {
 
   return (
     <aside className="ins-panel" aria-label="Insights">
-      {selected?.type === 'file' && <FileDetails key={selected.id} node={selected} />}
+      {selected?.type === 'file' && (
+        <FileDetails key={selected.id} node={selected} repoId={repoId} />
+      )}
       {selected?.type === 'folder' && <FolderDetails key={selected.id} node={selected} />}
       {!selected && (
         <RepositoryFacts

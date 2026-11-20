@@ -169,3 +169,83 @@ describe('workspaceStore wrapper folders (decision D-05)', () => {
     });
   });
 });
+
+describe('workspaceStore AI analysis (spec 8.6 item 9, 8.8)', () => {
+  beforeEach(() => state().reset());
+
+  const RESULT = {
+    noDependents: false,
+    cached: false,
+    summary: 's',
+    risks: [
+      { path: 'app/blog/page.tsx', level: 'high', reason: 'r' },
+      { path: 'app/layout.tsx', level: 'low', reason: 'r' },
+    ],
+    removedCount: 0,
+  };
+
+  it('records loading, then success, and adds the risk files to the focus', () => {
+    state().loadGraph(SAMPLE);
+    state().selectFile('f:src/lib/deep/math.ts');
+    expect(state().focus.nodeIds).not.toContain('f:app/layout.tsx');
+    state().startAnalysis('f:src/lib/deep/math.ts');
+    expect(state().aiByNodeId['f:src/lib/deep/math.ts']).toEqual({
+      status: 'loading',
+      result: null,
+      errorCode: null,
+    });
+
+    state().finishAnalysis('f:src/lib/deep/math.ts', RESULT, state().graph);
+    expect(state().aiByNodeId['f:src/lib/deep/math.ts'].status).toBe('success');
+    // app/layout.tsx has no imports, so only the AI result brings it into the focus.
+    expect(state().focus.nodeIds).toContain('f:app/layout.tsx');
+    expect(state().focus.nodeIds).toContain('f:app/blog/page.tsx');
+    // The collapsed folders holding risk files open, with the folders above them.
+    expect(state().expandedFolders.has('app')).toBe(true);
+    expect(state().expandedFolders.has('app/blog')).toBe(true);
+  });
+
+  it('keeps the result without changing the focus when another file is selected', () => {
+    state().loadGraph(SAMPLE);
+    state().selectFile('f:src/lib/deep/math.ts');
+    state().startAnalysis('f:src/lib/deep/math.ts');
+    state().selectFile('f:index.ts');
+    const focus = state().focus;
+    state().finishAnalysis('f:src/lib/deep/math.ts', RESULT, state().graph);
+    expect(state().focus).toBe(focus);
+
+    // Coming back to the analysed file shows its AI extension again.
+    state().selectFile('f:src/lib/deep/math.ts');
+    expect(state().focus.nodeIds).toContain('f:app/layout.tsx');
+  });
+
+  it('drops a response for a graph that has been replaced', () => {
+    state().loadGraph(SAMPLE);
+    const old = state().graph;
+    state().startAnalysis('f:index.ts');
+    state().loadGraph(SAMPLE);
+    state().finishAnalysis('f:index.ts', RESULT, old);
+    state().failAnalysis('f:index.ts', { code: 'AI_TIMEOUT' }, old);
+    expect(state().aiByNodeId).toEqual({});
+  });
+
+  it('records a failure with its code, and the wait for RATE_LIMITED, leaving focus intact', () => {
+    state().loadGraph(SAMPLE);
+    state().selectFile('f:src/lib/utils.ts');
+    const focus = state().focus;
+    state().failAnalysis(
+      'f:src/lib/utils.ts',
+      { code: 'RATE_LIMITED', retryAfterSeconds: 12 },
+      state().graph,
+    );
+    expect(state().aiByNodeId['f:src/lib/utils.ts']).toEqual({
+      status: 'error',
+      result: null,
+      errorCode: 'RATE_LIMITED',
+      retryAfterSeconds: 12,
+    });
+    expect(state().focus).toBe(focus);
+    state().failAnalysis('f:src/lib/utils.ts', {}, state().graph);
+    expect(state().aiByNodeId['f:src/lib/utils.ts'].errorCode).toBe('INTERNAL');
+  });
+});

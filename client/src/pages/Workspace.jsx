@@ -120,7 +120,7 @@ export default function Workspace() {
           <div className="ws-canvas">
             <GraphCanvas key={id} />
           </div>
-          <InsightsPanel unresolved={state.unresolved} skippedFiles={state.skipped} />
+          <InsightsPanel repoId={id} unresolved={state.unresolved} skippedFiles={state.skipped} />
         </div>
         <CodeDrawer repoId={id} containerRef={bodyRef} />
       </div>

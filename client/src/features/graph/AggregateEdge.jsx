@@ -56,7 +56,8 @@ export const strokeFor = (count) => Math.min(3, 1.25 + Math.log2(count) * 0.5);
 /**
  * An import edge, importer -> imported (spec 8.6 items 3 and 4). At rest it is drawn in
  * `--edge-rest`; when either end is hovered it rises to `--edge-active`. A detail edge (one
- * file-level edge inside a bundle, decision D-06) is drawn only on demand, always active. Hover is read from the
+ * file-level edge inside a bundle, decision D-06) is drawn only on demand, always active. An
+ * edge between an analysed file and one of its high-risk files is drawn in `--risk-high`. Hover is read from the
  * store per edge, so hovering never re-runs layout. An aggregated edge carries a count badge;
  * clicking it expands the folder at its target end.
  */
@@ -81,7 +82,15 @@ function AggregateEdge({
   const [path, labelX, labelY] = data.route
     ? routedPath(data.route, sourceX, sourceY, targetX, targetY)
     : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
-  const state = `${active ? ' is-active' : ''}${data.detail ? ' is-detail' : ''}${data.dim ? ' is-dim' : ''}`;
+  const state = [
+    active && 'is-active',
+    data.detail && 'is-detail',
+    data.dim && 'is-dim',
+    data.risk && `is-risk-${data.risk}`,
+  ]
+    .filter(Boolean)
+    .map((c) => ` ${c}`)
+    .join('');
   const imports = countOf(data.count, 'import', 'imports');
 
   return (
