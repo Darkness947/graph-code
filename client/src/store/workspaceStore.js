@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { aiHighlight } from '../features/ai/aiHighlight.js';
 import { buildGraphIndex } from '../features/graph/graphIndex.js';
 import { computeFocusSet } from '../features/graph/focus.js';
 import { folderChain, wrapperChain } from '../features/graph/visibility.js';
@@ -21,6 +22,30 @@ const initialState = () => ({
   sidebarCollapsed: false,
   codeDrawer: { open: false, heightPct: 40 },
 });
+
+/** The folders that must be open for a file in `folder` to be drawn (decision D-05 included). */
+const foldersToShow = (graph, folder) =>
+  folder ? [...folderChain(folder), ...wrapperChain(graph, folder)] : [];
+
+/**
+ * Focus mode for a file (spec 8.6 item 8), extended by its AI result when it has one (item 9):
+ * the risk files join the highlighted set and their folders open.
+ */
+function focusOn(graph, aiByNodeId, expandedFolders, id) {
+  const node = graph.nodesById.get(id);
+  const entry = aiByNodeId[id];
+  const ai = aiHighlight(graph, entry?.status === 'success' ? entry.result : null);
+  const nodeIds = computeFocusSet(graph, id);
+  const lit = new Set(nodeIds);
+  for (const riskId of ai.levels.keys()) if (!lit.has(riskId)) nodeIds.push(riskId);
+  const wanted = [node.parentPath, ...ai.folders].flatMap((f) => foldersToShow(graph, f));
+  return {
+    focus: { active: true, nodeIds },
+    ...(wanted.some((p) => !expandedFolders.has(p))
+      ? { expandedFolders: new Set([...expandedFolders, ...wanted]) }
+      : {}),
+  };
+}
 
 export const useWorkspaceStore = create((set, get) => ({
   ...initialState(),
@@ -56,23 +81,13 @@ export const useWorkspaceStore = create((set, get) => ({
 
   /**
    * Selects a file and enters focus mode (spec 8.6 item 8): the file and its 1–2 hop neighbours
-   * stay lit. The folders around the file open so it is drawn. Makes no API call.
+   * stay lit. The folders around the file open so it is drawn. Makes no API call. A file that
+   * already has an AI result shows it again (item 9).
    */
   selectFile: (id) => {
-    const { graph } = get();
-    const node = graph?.nodesById.get(id);
-    if (node?.type !== 'file') return;
-    const { expandedFolders } = get();
-    const wanted = node.parentPath
-      ? [...folderChain(node.parentPath), ...wrapperChain(graph, node.parentPath)]
-      : [];
-    set({
-      selectedNodeId: id,
-      focus: { active: true, nodeIds: computeFocusSet(graph, id) },
-      ...(wanted.some((p) => !expandedFolders.has(p))
-        ? { expandedFolders: new Set([...expandedFolders, ...wanted]) }
-        : {}),
-    });
+    const { graph, aiByNodeId, expandedFolders } = get();
+    if (graph?.nodesById.get(id)?.type !== 'file') return;
+    set({ selectedNodeId: id, ...focusOn(graph, aiByNodeId, expandedFolders, id) });
   },
 
   /** Selects a folder (spec 8.6 "Folder selected"). Focus mode is for files, so it ends. */
@@ -97,6 +112,43 @@ export const useWorkspaceStore = create((set, get) => ({
   clearFocus: () => {
     if (get().selectedNodeId === null && !get().focus.active) return;
     set({ selectedNodeId: null, focus: { active: false, nodeIds: [] } });
+  },
+
+  /** Marks an analysis of file `id` as waiting for the server (spec 8.8 `aiByNodeId`). */
+  startAnalysis: (id) =>
+    set({
+      aiByNodeId: { ...get().aiByNodeId, [id]: { status: 'loading', result: null, errorCode: null } },
+    }),
+
+  /**
+   * Stores an `AnalysisResult` for file `id`. When the file is still selected, its risk files
+   * join the focus (spec 8.6 item 9). A result for a graph that has since been replaced (another
+   * repository, or a reload) is dropped.
+   * @param {object} graph the `graph` the request was made for
+   */
+  finishAnalysis: (id, result, graph) => {
+    const state = get();
+    if (state.graph !== graph) return;
+    const aiByNodeId = { ...state.aiByNodeId, [id]: { status: 'success', result, errorCode: null } };
+    set({
+      aiByNodeId,
+      ...(state.selectedNodeId === id
+        ? focusOn(graph, aiByNodeId, state.expandedFolders, id)
+        : {}),
+    });
+  },
+
+  /**
+   * Records a failed analysis. `retryAfterSeconds` is kept for the `RATE_LIMITED` message.
+   * The structural focus is left as it was.
+   * @param {{ code?: string, retryAfterSeconds?: number }} error
+   * @param {object} graph the `graph` the request was made for
+   */
+  failAnalysis: (id, error, graph) => {
+    if (get().graph !== graph) return;
+    const entry = { status: 'error', result: null, errorCode: error?.code ?? 'INTERNAL' };
+    if (error?.retryAfterSeconds != null) entry.retryAfterSeconds = error.retryAfterSeconds;
+    set({ aiByNodeId: { ...get().aiByNodeId, [id]: entry } });
   },
 
   setSearchQuery: (query) => {
