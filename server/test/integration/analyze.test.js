@@ -25,17 +25,6 @@ const SHA = 'd'.repeat(40);
 const ROOMY = { windowMs: 60_000, limit: 1000 };
 const RATE_LIMITED_MESSAGE = /^You're doing that too often\. Try again in \d+ seconds\.$/;
 
-/** A promise with its resolve and reject exposed, to hold Gemini mid-call. */
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 const oauth = {
   authorizeUrl: (state) => `https://github.com/login/oauth/authorize?state=${state}`,
   exchangeCode: vi.fn(),
@@ -455,8 +444,28 @@ describe.skipIf(!hasTestDb)('POST /api/repos/:id/analyze (integration)', () => {
   });
 
   describe('rate limits and the in-flight lock (spec 7.1)', () => {
-    /** Starts a request now and resolves with its response. */
-    const start = (cookie, repoId, nodeId) => analyze(cookie, repoId, nodeId).then((r) => r);
+    /**
+     * Starts an analysis of `src/lib/utils.ts` for a new repository of `userId` and holds it
+     * inside Gemini. Resolves once Gemini has been called, so the lock is held.
+     */
+    async function holdFirstAnalysis(cookie, userId, name) {
+      const repoId = await insertRepo(userId, name);
+      const ids = await seed(repoId);
+      const gate = Promise.withResolvers();
+      gemini.generateJson.mockReturnValueOnce(gate.promise);
+      // `.then` starts the supertest request now instead of when it is awaited.
+      const response = analyze(cookie, repoId, ids.utils).then((r) => r);
+      await vi.waitFor(() => expect(gemini.generateJson).toHaveBeenCalled());
+      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
+      return {
+        repoId,
+        ids,
+        finish: async () => {
+          gate.resolve(answer(GOOD_RISKS));
+          expect((await response).status).toBe(200);
+        },
+      };
+    }
 
     it('limits analyses per user per window (429 RATE_LIMITED)', async () => {
       const limited = createApp(config, {
@@ -485,73 +494,43 @@ describe.skipIf(!hasTestDb)('POST /api/repos/:id/analyze (integration)', () => {
     });
 
     it('refuses a second concurrent analysis from the same user, then frees the slot', async () => {
-      const repoId = await insertRepo(userA, 'busy');
-      const ids = await seed(repoId);
-      const held = deferred();
-      gemini.generateJson.mockReturnValueOnce(held.promise);
-
-      const first = start(cookieA, repoId, ids.utils);
-      await vi.waitFor(() => expect(gemini.generateJson).toHaveBeenCalledTimes(1));
-      const second = await analyze(cookieA, repoId, ids.app);
+      const first = await holdFirstAnalysis(cookieA, userA, 'busy');
+      const second = await analyze(cookieA, first.repoId, first.ids.app);
       expect(second.status).toBe(429);
       expect(second.body.error.code).toBe('RATE_LIMITED');
       expect(second.body.error.retryAfterSeconds).toBeGreaterThanOrEqual(1);
       expect(second.body.error.retryAfterSeconds).toBeLessThanOrEqual(20);
       expect(second.body.error.message).toMatch(RATE_LIMITED_MESSAGE);
 
-      held.resolve(answer(GOOD_RISKS));
-      expect((await first).status).toBe(200);
+      await first.finish();
       expect(gemini.generateJson).toHaveBeenCalledTimes(1);
       // The refused request is not an analysis, so only the first one is audited.
-      expect(await auditRows(repoId)).toHaveLength(1);
-
-      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
-      expect((await analyze(cookieA, repoId, ids.app)).status).toBe(200);
+      expect(await auditRows(first.repoId)).toHaveLength(1);
+      expect((await analyze(cookieA, first.repoId, first.ids.app)).status).toBe(200);
     });
 
-    it('frees the slot after a failed analysis', async () => {
+    it('frees the slot after a failed analysis and after a 404', async () => {
       const repoId = await insertRepo(userA, 'fails');
       const ids = await seed(repoId);
       gemini.generateJson.mockRejectedValueOnce(finalError(['quota', 'quota', 'quota'], false, 3));
       expect((await analyze(cookieA, repoId, ids.utils)).status).toBe(429);
+      expect((await analyze(cookieA, repoId, randomUUID())).status).toBe(404);
       gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
       expect((await analyze(cookieA, repoId, ids.utils)).status).toBe(200);
     });
 
     it("does not block another user's analysis", async () => {
-      const repoA = await insertRepo(userA, 'a-busy');
-      const idsA = await seed(repoA);
+      const first = await holdFirstAnalysis(cookieA, userA, 'a-busy');
       const repoB = await insertRepo(userB, 'b-free');
       const idsB = await seed(repoB);
-      const held = deferred();
-      gemini.generateJson.mockReturnValueOnce(held.promise);
-
-      const first = start(cookieA, repoA, idsA.utils);
-      await vi.waitFor(() => expect(gemini.generateJson).toHaveBeenCalledTimes(1));
-      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
       expect((await analyze(cookieB, repoB, idsB.utils)).status).toBe(200);
-
-      held.resolve(answer(GOOD_RISKS));
-      expect((await first).status).toBe(200);
+      await first.finish();
     });
 
-    it('never takes the slot for a request that fails validation or access', async () => {
-      const repoId = await insertRepo(userA, 'checks');
-      const ids = await seed(repoId);
-      const held = deferred();
-      gemini.generateJson.mockReturnValueOnce(held.promise);
-
-      const first = start(cookieA, repoId, ids.utils);
-      await vi.waitFor(() => expect(gemini.generateJson).toHaveBeenCalledTimes(1));
-      // Validation runs before the lock, so a bad body is still a 400, not a 429.
-      expect((await analyze(cookieA, repoId, 'nope')).status).toBe(400);
-      held.resolve(answer(GOOD_RISKS));
-      expect((await first).status).toBe(200);
-
-      // A 404 releases the slot like any other outcome.
-      expect((await analyze(cookieA, repoId, randomUUID())).status).toBe(404);
-      gemini.generateJson.mockResolvedValue(answer(GOOD_RISKS));
-      expect((await analyze(cookieA, repoId, ids.app)).status).toBe(200);
+    it('validates before taking the slot, so a bad body is a 400 even while busy', async () => {
+      const first = await holdFirstAnalysis(cookieA, userA, 'checks');
+      expect((await analyze(cookieA, first.repoId, 'nope')).status).toBe(400);
+      await first.finish();
     });
   });
 });

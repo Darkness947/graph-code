@@ -317,39 +317,57 @@ describe('validateRequest', () => {
 describe('in-flight lock', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('refuses a second holder for the same key until the first releases', () => {
+  /** Holds `key` until the returned `finish` is called; resolves with the run's promise. */
+  function hold(lock, key) {
+    const gate = Promise.withResolvers();
+    const done = lock.run(key, () => gate.promise);
+    return { done, finish: gate.resolve, fail: gate.reject };
+  }
+
+  it('refuses a second run for the same key until the first settles', async () => {
     const lock = createInFlightLock({ holdMs: 20_000 });
-    const first = lock.tryAcquire('u-1');
-    expect(first).toHaveProperty('release');
-    expect(lock.tryAcquire('u-1')).toEqual({ retryAfterSeconds: 20 });
-    first.release();
-    expect(lock.tryAcquire('u-1')).toHaveProperty('release');
+    const first = hold(lock, 'u-1');
+    const fn = vi.fn();
+    await expect(lock.run('u-1', fn)).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+      extras: { retryAfterSeconds: 20 },
+      message: "You're doing that too often. Try again in 20 seconds.",
+    });
+    expect(fn).not.toHaveBeenCalled();
+    first.finish('ok');
+    await expect(first.done).resolves.toBe('ok');
+    await expect(lock.run('u-1', async () => 'again')).resolves.toBe('again');
   });
 
-  it('keeps keys independent', () => {
+  it('releases the key when the run fails', async () => {
     const lock = createInFlightLock({ holdMs: 20_000 });
-    expect(lock.tryAcquire('u-1')).toHaveProperty('release');
-    expect(lock.tryAcquire('u-2')).toHaveProperty('release');
+    const first = hold(lock, 'u-1');
+    first.fail(new Error('boom'));
+    await expect(first.done).rejects.toThrow('boom');
+    await expect(lock.run('u-1', async () => 'next')).resolves.toBe('next');
   });
 
-  it("ignores a repeated release, so it never frees a later holder's slot", () => {
+  it('keeps keys independent', async () => {
     const lock = createInFlightLock({ holdMs: 20_000 });
-    const first = lock.tryAcquire('u-1');
-    first.release();
-    const second = lock.tryAcquire('u-1');
-    first.release();
-    expect(lock.tryAcquire('u-1')).toHaveProperty('retryAfterSeconds');
-    second.release();
-    expect(lock.tryAcquire('u-1')).toHaveProperty('release');
+    const first = hold(lock, 'u-1');
+    await expect(lock.run('u-2', async () => 'other')).resolves.toBe('other');
+    first.finish();
+    await first.done;
   });
 
-  it('counts retryAfterSeconds down to the end of the hold, never below 1', () => {
+  it('counts retryAfterSeconds down to the end of the hold, never below 1', async () => {
     vi.useFakeTimers();
     const lock = createInFlightLock({ holdMs: 20_000 });
-    lock.tryAcquire('u-1');
+    const first = hold(lock, 'u-1');
     vi.advanceTimersByTime(7_500);
-    expect(lock.tryAcquire('u-1')).toEqual({ retryAfterSeconds: 13 });
+    await expect(lock.run('u-1', vi.fn())).rejects.toMatchObject({
+      extras: { retryAfterSeconds: 13 },
+    });
     vi.advanceTimersByTime(60_000);
-    expect(lock.tryAcquire('u-1')).toEqual({ retryAfterSeconds: 1 });
+    await expect(lock.run('u-1', vi.fn())).rejects.toMatchObject({
+      extras: { retryAfterSeconds: 1 },
+    });
+    first.finish();
+    await first.done;
   });
 });

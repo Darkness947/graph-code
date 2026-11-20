@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
 import { isUuid, uuidParam, validateRequest } from '../middleware/validate.js';
-import { createLimiter, rateLimitedError } from '../middleware/rateLimits.js';
+import { createLimiter } from '../middleware/rateLimits.js';
 
 /** Analysis modes available in Demo 1 (spec 7.7). */
 const MODES = ['blast_radius'];
@@ -26,12 +26,9 @@ export function createAnalyzeRouter({ analyze, analyzeLimit, lock }) {
     body('nodeId').custom(isUuid).withMessage('nodeId must be a UUID'),
     validateRequest,
     async (req, res) => {
-      const slot = lock.tryAcquire(req.user.id);
-      if (!('release' in slot)) throw rateLimitedError(slot.retryAfterSeconds);
-      // Released when the analysis settles, not when the client disconnects.
-      try {
-        res.json(
-          await analyze.analyzeGraph({
+      res.json(
+        await lock.run(req.user.id, () =>
+          analyze.analyzeGraph({
             userId: req.user.id,
             sessionId: req.sessionID,
             requestId: req.id,
@@ -39,10 +36,8 @@ export function createAnalyzeRouter({ analyze, analyzeLimit, lock }) {
             mode: req.body.mode,
             nodeId: req.body.nodeId,
           }),
-        );
-      } finally {
-        slot.release();
-      }
+        ),
+      );
     },
   );
 

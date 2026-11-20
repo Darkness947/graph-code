@@ -50,34 +50,35 @@ export function createLimiter({ windowMs, limit }) {
 /**
  * One operation in flight per key (spec 7.1: one analysis per user). In-process, which is enough
  * for the single server instance of Demo 1.
- * @param {{ holdMs: number }} options how long one operation can take at most; used to tell a
- *   refused caller when to retry
+ * @param {{ holdMs: number }} options how long one operation can take at most; tells a refused
+ *   caller when to retry
  */
 export function createInFlightLock({ holdMs }) {
-  /** @type {Map<string, { startedAt: number }>} */
+  /** @type {Map<string, number>} key -> start time (ms) */
   const held = new Map();
 
   /**
+   * Runs `fn` while holding `key`. Throws RATE_LIMITED while another call holds it. The key is
+   * released when `fn` settles, not when the client disconnects.
+   * @template T
    * @param {string} key
-   * @returns {{ release: () => void } | { retryAfterSeconds: number }}
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
    */
-  function tryAcquire(key) {
-    const current = held.get(key);
-    if (current) {
-      const remainingMs = current.startedAt + holdMs - Date.now();
-      return { retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)) };
+  async function run(key, fn) {
+    const startedAt = held.get(key);
+    if (startedAt !== undefined) {
+      throw rateLimitedError(Math.max(1, Math.ceil((startedAt + holdMs - Date.now()) / 1000)));
     }
-    const token = { startedAt: Date.now() };
-    held.set(key, token);
-    return {
-      // Only the holder's own entry is removed, so a repeated release is harmless.
-      release: () => {
-        if (held.get(key) === token) held.delete(key);
-      },
-    };
+    held.set(key, Date.now());
+    try {
+      return await fn();
+    } finally {
+      held.delete(key);
+    }
   }
 
-  return { tryAcquire };
+  return { run };
 }
 
 /** All `/api` routes: 300 requests per 15 minutes (spec 7.1). */
