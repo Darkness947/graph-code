@@ -179,7 +179,7 @@ describe('workspaceStore AI analysis (spec 8.6 item 9, 8.8)', () => {
     summary: 's',
     risks: [
       { path: 'app/blog/page.tsx', level: 'high', reason: 'r' },
-      { path: 'index.ts', level: 'low', reason: 'r' },
+      { path: 'app/layout.tsx', level: 'low', reason: 'r' },
     ],
     removedCount: 0,
   };
@@ -187,6 +187,7 @@ describe('workspaceStore AI analysis (spec 8.6 item 9, 8.8)', () => {
   it('records loading, then success, and adds the risk files to the focus', () => {
     state().loadGraph(SAMPLE);
     state().selectFile('f:src/lib/deep/math.ts');
+    expect(state().focus.nodeIds).not.toContain('f:app/layout.tsx');
     state().startAnalysis('f:src/lib/deep/math.ts');
     expect(state().aiByNodeId['f:src/lib/deep/math.ts']).toEqual({
       status: 'loading',
@@ -196,8 +197,8 @@ describe('workspaceStore AI analysis (spec 8.6 item 9, 8.8)', () => {
 
     state().finishAnalysis('f:src/lib/deep/math.ts', RESULT, state().graph);
     expect(state().aiByNodeId['f:src/lib/deep/math.ts'].status).toBe('success');
-    // index.ts is three hops away, so only the AI result brings it into the focus.
-    expect(state().focus.nodeIds).toContain('f:index.ts');
+    // app/layout.tsx has no imports, so only the AI result brings it into the focus.
+    expect(state().focus.nodeIds).toContain('f:app/layout.tsx');
     expect(state().focus.nodeIds).toContain('f:app/blog/page.tsx');
     // The collapsed folders holding risk files open, with the folders above them.
     expect(state().expandedFolders.has('app')).toBe(true);
@@ -208,14 +209,14 @@ describe('workspaceStore AI analysis (spec 8.6 item 9, 8.8)', () => {
     state().loadGraph(SAMPLE);
     state().selectFile('f:src/lib/deep/math.ts');
     state().startAnalysis('f:src/lib/deep/math.ts');
-    state().selectFile('f:app/layout.tsx');
+    state().selectFile('f:index.ts');
     const focus = state().focus;
     state().finishAnalysis('f:src/lib/deep/math.ts', RESULT, state().graph);
     expect(state().focus).toBe(focus);
 
     // Coming back to the analysed file shows its AI extension again.
     state().selectFile('f:src/lib/deep/math.ts');
-    expect(state().focus.nodeIds).toContain('f:index.ts');
+    expect(state().focus.nodeIds).toContain('f:app/layout.tsx');
   });
 
   it('drops a response for a graph that has been replaced', () => {
