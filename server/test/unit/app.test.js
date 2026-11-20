@@ -9,7 +9,13 @@ import { validateRequest, uuidParam, repoInputBody } from '../../src/middleware/
 import { AppError } from '../../src/errors/AppError.js';
 import { ERROR_STATUS } from '../../src/errors/codes.js';
 import { cookieOptions } from '../../src/middleware/session.js';
-import { rateLimitKey, GLOBAL_LIMIT, ADD_REPO_LIMIT } from '../../src/middleware/rateLimits.js';
+import {
+  rateLimitKey,
+  createInFlightLock,
+  GLOBAL_LIMIT,
+  ADD_REPO_LIMIT,
+  ANALYZE_LIMIT,
+} from '../../src/middleware/rateLimits.js';
 
 const config = {
   NODE_ENV: 'test',
@@ -114,6 +120,10 @@ describe('rate limiting', () => {
 
   it('allows 5 repository additions per 10 minutes (spec 7.1)', () => {
     expect(ADD_REPO_LIMIT).toEqual({ windowMs: 10 * 60 * 1000, limit: 5 });
+  });
+
+  it('allows 10 analyses per minute (spec 7.1)', () => {
+    expect(ANALYZE_LIMIT).toEqual({ windowMs: 60 * 1000, limit: 10 });
   });
 
   it('keys by user ID when signed in, otherwise by IP', () => {
@@ -301,5 +311,45 @@ describe('validateRequest', () => {
     const res = await request(app).post('/named').send({ name: 'x' });
     expect(res.status).toBe(400);
     expect(JSON.stringify(res.body)).not.toContain('"x"');
+  });
+});
+
+describe('in-flight lock', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('refuses a second holder for the same key until the first releases', () => {
+    const lock = createInFlightLock({ holdMs: 20_000 });
+    const first = lock.tryAcquire('u-1');
+    expect(first).toHaveProperty('release');
+    expect(lock.tryAcquire('u-1')).toEqual({ retryAfterSeconds: 20 });
+    first.release();
+    expect(lock.tryAcquire('u-1')).toHaveProperty('release');
+  });
+
+  it('keeps keys independent', () => {
+    const lock = createInFlightLock({ holdMs: 20_000 });
+    expect(lock.tryAcquire('u-1')).toHaveProperty('release');
+    expect(lock.tryAcquire('u-2')).toHaveProperty('release');
+  });
+
+  it("ignores a repeated release, so it never frees a later holder's slot", () => {
+    const lock = createInFlightLock({ holdMs: 20_000 });
+    const first = lock.tryAcquire('u-1');
+    first.release();
+    const second = lock.tryAcquire('u-1');
+    first.release();
+    expect(lock.tryAcquire('u-1')).toHaveProperty('retryAfterSeconds');
+    second.release();
+    expect(lock.tryAcquire('u-1')).toHaveProperty('release');
+  });
+
+  it('counts retryAfterSeconds down to the end of the hold, never below 1', () => {
+    vi.useFakeTimers();
+    const lock = createInFlightLock({ holdMs: 20_000 });
+    lock.tryAcquire('u-1');
+    vi.advanceTimersByTime(7_500);
+    expect(lock.tryAcquire('u-1')).toEqual({ retryAfterSeconds: 13 });
+    vi.advanceTimersByTime(60_000);
+    expect(lock.tryAcquire('u-1')).toEqual({ retryAfterSeconds: 1 });
   });
 });

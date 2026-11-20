@@ -1,6 +1,12 @@
 import express from 'express';
 import { applySecurity } from './middleware/security.js';
-import { createLimiter, GLOBAL_LIMIT, ADD_REPO_LIMIT } from './middleware/rateLimits.js';
+import {
+  createLimiter,
+  createInFlightLock,
+  GLOBAL_LIMIT,
+  ADD_REPO_LIMIT,
+  ANALYZE_LIMIT,
+} from './middleware/rateLimits.js';
 import { notFoundHandler, createErrorHandler } from './middleware/errors.js';
 import { createSessionMiddleware } from './middleware/session.js';
 import { createRequireAuth } from './middleware/requireAuth.js';
@@ -34,6 +40,7 @@ import { createGeminiClient } from './services/ai/geminiClient.js';
  *   oauth?: ReturnType<typeof createGithubOAuth>,
  *   crypto?: ReturnType<typeof tokenCryptoFromConfig>, github?: ReturnType<typeof createGithubClient>,
  *   enqueue?: (jobId: string) => void, addRepoLimit?: { windowMs: number, limit: number },
+ *   analyzeLimit?: { windowMs: number, limit: number },
  *   gemini?: ReturnType<typeof createGeminiClient> }} [options] pool and test overrides
  * @returns {import('express').Express}
  */
@@ -85,7 +92,11 @@ export function createApp(config, options = {}) {
       '/repos',
       requireAuth,
       createGraphRouter({ graph }),
-      createAnalyzeRouter({ analyze }),
+      createAnalyzeRouter({
+        analyze,
+        analyzeLimit: options.analyzeLimit ?? ANALYZE_LIMIT,
+        lock: createInFlightLock({ holdMs: config.AI_TIMEOUT_MS }),
+      }),
       createReposRouter({ pool, crypto, github, enqueue, addRepoLimit, repos }),
     );
     api.use('/jobs', requireAuth, createJobsRouter({ jobs }));

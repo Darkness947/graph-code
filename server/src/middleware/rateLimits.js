@@ -13,6 +13,19 @@ export function rateLimitKey(req) {
 }
 
 /**
+ * The standard RATE_LIMITED error (spec 6.1, wording from 8.9).
+ * @param {number} retryAfterSeconds
+ * @returns {AppError}
+ */
+export function rateLimitedError(retryAfterSeconds) {
+  return new AppError(
+    'RATE_LIMITED',
+    `You're doing that too often. Try again in ${retryAfterSeconds} seconds.`,
+    { retryAfterSeconds },
+  );
+}
+
+/**
  * Builds a limiter that answers with the standard RATE_LIMITED error (spec 6.1).
  * @param {{ windowMs: number, limit: number }} options
  * @returns {import('express').RequestHandler}
@@ -29,17 +42,42 @@ export function createLimiter({ windowMs, limit }) {
       const retryAfterSeconds = resetTime
         ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
         : Math.ceil(windowMs / 1000);
-      next(
-        new AppError(
-          'RATE_LIMITED',
-          `You're doing that too often. Try again in ${retryAfterSeconds} seconds.`,
-          {
-            retryAfterSeconds,
-          },
-        ),
-      );
+      next(rateLimitedError(retryAfterSeconds));
     },
   });
+}
+
+/**
+ * One operation in flight per key (spec 7.1: one analysis per user). In-process, which is enough
+ * for the single server instance of Demo 1.
+ * @param {{ holdMs: number }} options how long one operation can take at most; used to tell a
+ *   refused caller when to retry
+ */
+export function createInFlightLock({ holdMs }) {
+  /** @type {Map<string, { startedAt: number }>} */
+  const held = new Map();
+
+  /**
+   * @param {string} key
+   * @returns {{ release: () => void } | { retryAfterSeconds: number }}
+   */
+  function tryAcquire(key) {
+    const current = held.get(key);
+    if (current) {
+      const remainingMs = current.startedAt + holdMs - Date.now();
+      return { retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)) };
+    }
+    const token = { startedAt: Date.now() };
+    held.set(key, token);
+    return {
+      // Only the holder's own entry is removed, so a repeated release is harmless.
+      release: () => {
+        if (held.get(key) === token) held.delete(key);
+      },
+    };
+  }
+
+  return { tryAcquire };
 }
 
 /** All `/api` routes: 300 requests per 15 minutes (spec 7.1). */
@@ -47,3 +85,6 @@ export const GLOBAL_LIMIT = { windowMs: 15 * 60 * 1000, limit: 300 };
 
 /** `POST /api/repos`: 5 requests per 10 minutes (spec 7.1). */
 export const ADD_REPO_LIMIT = { windowMs: 10 * 60 * 1000, limit: 5 };
+
+/** `POST /api/repos/:id/analyze`: 10 requests per minute (spec 7.1). */
+export const ANALYZE_LIMIT = { windowMs: 60 * 1000, limit: 10 };
