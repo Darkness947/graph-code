@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
 const globalCss = readFileSync(new URL('./global.css', import.meta.url), 'utf8');
 const graphCss = readFileSync(new URL('../features/graph/graph.css', import.meta.url), 'utf8');
+const aiCss = readFileSync(new URL('../features/ai/ai.css', import.meta.url), 'utf8');
 
 // Spec 8.1, in table order.
 const TOKENS = {
@@ -73,5 +74,16 @@ describe('Bootstrap overrides and colour rules', () => {
     expect(graphCss).not.toMatch(/-rgb:\s*\d/);
     expect(graphCss).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     expect(graphCss).not.toMatch(/--risk-|--danger/);
+  });
+
+  it('uses the risk colours only on AI risk selectors, and only tokens, in ai.css', () => {
+    expect(aiCss).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(aiCss).not.toMatch(/--danger/);
+    const rules = [...aiCss.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)];
+    const risky = rules.filter(([, , body]) => /--risk-/.test(body));
+    expect(risky.length).toBeGreaterThan(0);
+    for (const [, selector] of risky) {
+      expect(selector).toMatch(/risk-(high|medium|low)|ai-level-(high|medium)/);
+    }
   });
 });

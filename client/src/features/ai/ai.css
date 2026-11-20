@@ -1,0 +1,170 @@
+/*
+ * AI panel and the AI extension of the canvas (spec 8.6). The only stylesheet that may use the
+ * risk colours, and only on risk selectors (`risk-*`, `ai-level-*`, `is-risk-high`).
+ */
+
+/* ---- AI panel (spec 8.6) ------------------------------------------------------------ */
+
+.ai-panel {
+  margin-top: 4px;
+}
+
+.ai-analyze {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* "No dependents" and errors share a layout but must not look alike: a filled green check
+   on a plain surface, versus an outlined icon in a bordered box with a Try again button. */
+.ai-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.ai-state i {
+  font-size: 24px;
+}
+
+.ai-state p {
+  margin: 0;
+}
+
+.ai-safe i {
+  color: var(--success-green);
+}
+
+.ai-error {
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+}
+
+.ai-error p {
+  color: var(--text-primary);
+}
+
+.ai-result {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-default);
+}
+
+.ai-result-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ai-result-head h3 {
+  margin: 0 auto 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-badge {
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.ai-summary {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-card {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.ai-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ai-card-path {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ai-level {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.ai-level-high {
+  border-color: var(--risk-high);
+  color: var(--risk-high);
+}
+
+.ai-level-medium {
+  border-color: var(--risk-medium);
+  color: var(--risk-medium);
+}
+
+.ai-reason {
+  margin: 4px 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ai-footnote,
+.ai-disclaimer {
+  margin: 12px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* ---- Canvas: AI extension ---------------------------------------------------------- */
+
+/* AI extension (spec 8.6 item 9): risk borders on files, red edges to high-risk files. */
+.gc-canvas .react-flow__node.risk-high > .gc-file {
+  border-color: var(--risk-high);
+  border-width: 2px;
+}
+
+.gc-canvas .react-flow__node.risk-medium > .gc-file {
+  border-color: var(--risk-medium);
+  border-width: 2px;
+}
+
+.gc-canvas .react-flow__node.risk-low > .gc-file {
+  border-style: dashed;
+  border-color: var(--risk-low);
+  border-width: 2px;
+}
+
+.gc-canvas .react-flow__edge-path.gc-edge.is-risk-high {
+  stroke: var(--risk-high);
+  opacity: 1;
+}
+
+.gc-canvas .gc-edge-arrow.is-risk-high {
+  fill: var(--risk-high);
+  opacity: 1;
+}

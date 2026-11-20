@@ -15,7 +15,8 @@ export function aiHighlight(index, result) {
   const folders = new Set();
   if (!result?.risks?.length) return { levels, folders: [] };
   const byPath = new Map();
-  for (const node of index.nodesById.values()) if (node.type === 'file') byPath.set(node.path, node);
+  for (const node of index.nodesById.values())
+    if (node.type === 'file') byPath.set(node.path, node);
   for (const { path, level } of result.risks) {
     const node = byPath.get(path);
     if (!node || levels.has(node.id)) continue;

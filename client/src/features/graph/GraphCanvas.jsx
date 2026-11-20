@@ -14,12 +14,14 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import SearchBar from '../search/SearchBar.jsx';
 import DirectorySidebar from '../sidebar/DirectorySidebar.jsx';
 import { useWorkspaceStore } from '../../store/workspaceStore.js';
+import { aiHighlight, selectedAiResult } from '../ai/aiHighlight.js';
 import AggregateEdge from './AggregateEdge.jsx';
 import CanvasErrorBoundary from './CanvasErrorBoundary.jsx';
 import FileNode from './FileNode.jsx';
 import FolderNode from './FolderNode.jsx';
 import GraphFallbackList from './GraphFallbackList.jsx';
 import './graph.css';
+import '../ai/ai.css';
 import { highlightedVisibleIds } from './focus.js';
 import { layoutGraph } from './layout.js';
 import { MOVE_MS, useAnimatedNodes } from './useAnimatedNodes.js';
@@ -172,18 +174,28 @@ function Canvas() {
       parentOf,
     );
   }, [focus, layout, graph, expandedFolders]);
+  // The AI extension (item 9): the selected file's risk files get a border in their level's
+  // colour, and the edges between it and its high-risk files turn red. The risk files are
+  // already in the focus set and their folders open (store `focusOn`).
+  const aiResult = useWorkspaceStore(selectedAiResult);
+  const riskLevels = useMemo(() => aiHighlight(graph, aiResult).levels, [graph, aiResult]);
+
   // Decorated copies are cached per source object, so while nodes animate only the ones that
   // moved are copied again, and a hover does not copy every dimmed edge.
-  const nodeCache = useMemo(() => new WeakMap(), [lit, selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const edgeCache = useMemo(() => new WeakMap(), [lit]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nodeCache = useMemo(() => new WeakMap(), [lit, selectedNodeId, riskLevels]); // eslint-disable-line react-hooks/exhaustive-deps
+  const edgeCache = useMemo(() => new WeakMap(), [lit, selectedNodeId, riskLevels]); // eslint-disable-line react-hooks/exhaustive-deps
   const nodes = useMemo(
     () =>
       lit
         ? drawn.map((n) =>
             copyOnce(nodeCache, n, () => {
-              const dim = lit.has(n.id) ? '' : 'is-dim';
-              const selected = n.id === selectedNodeId ? 'is-selected' : '';
-              return dim || selected ? { ...n, className: `${dim} ${selected}`.trim() } : n;
+              const level = riskLevels.get(n.id);
+              const classes = [
+                lit.has(n.id) ? '' : 'is-dim',
+                n.id === selectedNodeId ? 'is-selected' : '',
+                level ? `risk-${level}` : '',
+              ].filter(Boolean);
+              return classes.length ? { ...n, className: classes.join(' ') } : n;
             }),
           )
         : drawn.map((n) =>
@@ -191,19 +203,20 @@ function Canvas() {
               ? copyOnce(nodeCache, n, () => ({ ...n, className: 'is-selected' }))
               : n,
           ),
-    [drawn, lit, selectedNodeId, nodeCache],
+    [drawn, lit, selectedNodeId, riskLevels, nodeCache],
   );
-  const shownEdges = useMemo(
-    () =>
-      lit
-        ? edges.map((e) =>
-            lit.has(e.source) && lit.has(e.target)
-              ? e
-              : copyOnce(edgeCache, e, () => ({ ...e, data: { ...e.data, dim: true } })),
-          )
-        : edges,
-    [edges, lit, edgeCache],
-  );
+  const shownEdges = useMemo(() => {
+    if (!lit) return edges;
+    const isRisky = (e) =>
+      (e.source === selectedNodeId && riskLevels.get(e.target) === 'high') ||
+      (e.target === selectedNodeId && riskLevels.get(e.source) === 'high');
+    return edges.map((e) => {
+      if (isRisky(e))
+        return copyOnce(edgeCache, e, () => ({ ...e, data: { ...e.data, risk: 'high' } }));
+      if (lit.has(e.source) && lit.has(e.target)) return e;
+      return copyOnce(edgeCache, e, () => ({ ...e, data: { ...e.data, dim: true } }));
+    });
+  }, [edges, lit, selectedNodeId, riskLevels, edgeCache]);
 
   // Dragging: React Flow reports each pointer move as a position change; the node moves in the
   // drawn nodes and its edges follow. Other changes (measured sizes) are ignored, because the

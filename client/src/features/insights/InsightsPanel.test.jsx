@@ -102,13 +102,13 @@ describe('InsightsPanel (spec 8.6)', () => {
       expect(screen.queryByText('src/lib/deep/math.ts')).toBeNull();
     });
 
-    it('opens the code drawer from View code and has no AI button yet', async () => {
+    it('opens the code drawer from View code and offers the AI analysis', async () => {
       const user = userEvent.setup();
       renderPanel();
       select('f:index.ts');
       await user.click(screen.getByRole('button', { name: 'View code' }));
       expect(store().codeDrawer.open).toBe(true);
-      expect(screen.queryByRole('button', { name: /Analyze/ })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Analyze change impact (AI)' })).toBeEnabled();
     });
   });
 

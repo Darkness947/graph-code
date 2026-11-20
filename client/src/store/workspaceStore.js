@@ -117,7 +117,10 @@ export const useWorkspaceStore = create((set, get) => ({
   /** Marks an analysis of file `id` as waiting for the server (spec 8.8 `aiByNodeId`). */
   startAnalysis: (id) =>
     set({
-      aiByNodeId: { ...get().aiByNodeId, [id]: { status: 'loading', result: null, errorCode: null } },
+      aiByNodeId: {
+        ...get().aiByNodeId,
+        [id]: { status: 'loading', result: null, errorCode: null },
+      },
     }),
 
   /**
@@ -129,12 +132,13 @@ export const useWorkspaceStore = create((set, get) => ({
   finishAnalysis: (id, result, graph) => {
     const state = get();
     if (state.graph !== graph) return;
-    const aiByNodeId = { ...state.aiByNodeId, [id]: { status: 'success', result, errorCode: null } };
+    const aiByNodeId = {
+      ...state.aiByNodeId,
+      [id]: { status: 'success', result, errorCode: null },
+    };
     set({
       aiByNodeId,
-      ...(state.selectedNodeId === id
-        ? focusOn(graph, aiByNodeId, state.expandedFolders, id)
-        : {}),
+      ...(state.selectedNodeId === id ? focusOn(graph, aiByNodeId, state.expandedFolders, id) : {}),
     });
   },
 

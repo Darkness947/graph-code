@@ -232,7 +232,11 @@ describe('workspaceStore AI analysis (spec 8.6 item 9, 8.8)', () => {
     state().loadGraph(SAMPLE);
     state().selectFile('f:src/lib/utils.ts');
     const focus = state().focus;
-    state().failAnalysis('f:src/lib/utils.ts', { code: 'RATE_LIMITED', retryAfterSeconds: 12 }, state().graph);
+    state().failAnalysis(
+      'f:src/lib/utils.ts',
+      { code: 'RATE_LIMITED', retryAfterSeconds: 12 },
+      state().graph,
+    );
     expect(state().aiByNodeId['f:src/lib/utils.ts']).toEqual({
       status: 'error',
       result: null,

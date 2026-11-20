@@ -3,10 +3,22 @@ import { aiErrorIcon, aiErrorMessage, REMOVED_NOTE } from './messages.js';
 
 describe('AI messages (spec 8.9)', () => {
   it.each([
-    ['AI_QUOTA_EXCEEDED', 'AI analysis is temporarily unavailable — try again in a moment.', 'bi-clock'],
+    [
+      'AI_QUOTA_EXCEEDED',
+      'AI analysis is temporarily unavailable — try again in a moment.',
+      'bi-clock',
+    ],
     ['AI_TIMEOUT', 'The AI service took too long to respond. Try again.', 'bi-clock'],
-    ['AI_UNREACHABLE', "Couldn't reach the AI service. Check your connection and try again.", 'bi-plug'],
-    ['AI_MALFORMED', "Couldn't generate a reliable analysis for this file. Try again.", 'bi-exclamation-triangle'],
+    [
+      'AI_UNREACHABLE',
+      "Couldn't reach the AI service. Check your connection and try again.",
+      'bi-plug',
+    ],
+    [
+      'AI_MALFORMED',
+      "Couldn't generate a reliable analysis for this file. Try again.",
+      'bi-exclamation-triangle',
+    ],
     ['GITHUB_UNAVAILABLE', "GitHub isn't responding right now. Try again in a moment.", 'bi-plug'],
     ['INTERNAL', 'Something went wrong. Try again.', 'bi-exclamation-triangle'],
   ])('%s', (code, message, icon) => {
