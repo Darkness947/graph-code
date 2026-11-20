@@ -17,7 +17,7 @@ export function rateLimitKey(req) {
  * @param {number} retryAfterSeconds
  * @returns {AppError}
  */
-export function rateLimitedError(retryAfterSeconds) {
+function rateLimitedError(retryAfterSeconds) {
   return new AppError(
     'RATE_LIMITED',
     `You're doing that too often. Try again in ${retryAfterSeconds} seconds.`,
@@ -47,14 +47,17 @@ export function createLimiter({ windowMs, limit }) {
   });
 }
 
+/** A hold older than this is treated as abandoned (an operation that never settled). */
+export const STALE_HOLD_MS = 2 * 60 * 1000;
+
 /**
  * One operation in flight per key (spec 7.1: one analysis per user). In-process, which is enough
  * for the single server instance of Demo 1.
- * @param {{ holdMs: number }} options how long one operation can take at most; tells a refused
- *   caller when to retry
+ * @param {{ holdMs: number, staleMs?: number }} options `holdMs` is the expected longest run,
+ *   used to tell a refused caller when to retry; `staleMs` frees a hold that never settled
  */
-export function createInFlightLock({ holdMs }) {
-  /** @type {Map<string, number>} key -> start time (ms) */
+export function createInFlightLock({ holdMs, staleMs = STALE_HOLD_MS }) {
+  /** @type {Map<string, { startedAt: number }>} */
   const held = new Map();
 
   /**
@@ -66,15 +69,18 @@ export function createInFlightLock({ holdMs }) {
    * @returns {Promise<T>}
    */
   async function run(key, fn) {
-    const startedAt = held.get(key);
-    if (startedAt !== undefined) {
-      throw rateLimitedError(Math.max(1, Math.ceil((startedAt + holdMs - Date.now()) / 1000)));
+    const now = Date.now();
+    const current = held.get(key);
+    if (current && now - current.startedAt < staleMs) {
+      throw rateLimitedError(Math.max(1, Math.ceil((current.startedAt + holdMs - now) / 1000)));
     }
-    held.set(key, Date.now());
+    // A fresh object per hold, so a stale run that settles late never frees a newer hold.
+    const hold = { startedAt: now };
+    held.set(key, hold);
     try {
       return await fn();
     } finally {
-      held.delete(key);
+      if (held.get(key) === hold) held.delete(key);
     }
   }
 

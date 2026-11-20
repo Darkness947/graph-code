@@ -12,6 +12,7 @@ import { cookieOptions } from '../../src/middleware/session.js';
 import {
   rateLimitKey,
   createInFlightLock,
+  STALE_HOLD_MS,
   GLOBAL_LIMIT,
   ADD_REPO_LIMIT,
   ANALYZE_LIMIT,
@@ -369,5 +370,26 @@ describe('in-flight lock', () => {
     });
     first.finish();
     await first.done;
+  });
+
+  it('frees a hold that never settled after staleMs, and the late run keeps the new hold', async () => {
+    vi.useFakeTimers();
+    const lock = createInFlightLock({ holdMs: 20_000, staleMs: 120_000 });
+    const hung = hold(lock, 'u-1');
+    vi.advanceTimersByTime(119_000);
+    await expect(lock.run('u-1', vi.fn())).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    vi.advanceTimersByTime(1_000);
+    const fresh = hold(lock, 'u-1');
+    hung.finish();
+    await hung.done;
+    // The stale run settling must not release the fresh hold.
+    await expect(lock.run('u-1', vi.fn())).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    fresh.finish();
+    await fresh.done;
+    await expect(lock.run('u-1', async () => 'free')).resolves.toBe('free');
+  });
+
+  it('frees stale holds after two minutes by default', () => {
+    expect(STALE_HOLD_MS).toBe(2 * 60 * 1000);
   });
 });
