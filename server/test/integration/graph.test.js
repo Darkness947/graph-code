@@ -333,6 +333,25 @@ describe.skipIf(!hasTestDb)('graph and source endpoints (integration)', () => {
       expect(rows[0].access_token_enc).toBeNull();
     });
 
+    it('keeps the session and the token on an unconfirmed GitHub 401 (502, retryable)', async () => {
+      const cookie = await signIn(app, oauth, 304);
+      const userId = await userIdOf(304);
+      const repoId = await insertRepo(userId, 'tailor');
+      const ids = await seedGraph(repoId);
+      const err = githubError('TOKEN_UNCONFIRMED');
+      err.githubStatus = 401;
+      github.getFileSource.mockRejectedValue(err);
+
+      const res = await getSource(cookie, repoId, ids.utils);
+      expect(res.status).toBe(502);
+      expect(res.body.error.code).toBe('GITHUB_UNAVAILABLE');
+      expect((await request(app).get('/api/me').set('Cookie', cookie)).status).toBe(200);
+      const { rows } = await pool.query('SELECT access_token_enc FROM users WHERE id = $1', [
+        userId,
+      ]);
+      expect(rows[0].access_token_enc).not.toBeNull();
+    });
+
     it('returns 409 GRAPH_NOT_READY before ingestion succeeded', async () => {
       const repoId = await insertRepo(userA, 'busy', 'analyzing');
       const nodeId = await insertNode(repoId, 'a.js', 'file', { language: 'js', sizeBytes: 1 });

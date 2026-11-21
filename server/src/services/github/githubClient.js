@@ -5,6 +5,7 @@ import { AppError } from '../../errors/AppError.js';
 export const ALLOWED_HOSTS = Object.freeze(['github.com', 'api.github.com', 'codeload.github.com']);
 
 const API_TIMEOUT_MS = 15000;
+const USER_URL = 'https://api.github.com/user';
 const ZIP_TIMEOUT_MS = 60000;
 const MAX_REDIRECTS = 3;
 /** Largest file source fetched from GitHub (spec 6.2). */
@@ -96,9 +97,10 @@ function unavailable(reason, status) {
  * retried once on network errors and 5xx, never on 4xx. Tokens and headers are never logged.
  *
  * Failures are `AppError`s: `REPO_NOT_FOUND_ON_GITHUB` for 404, `UNAUTHENTICATED` for a 401 on a
- * request that carried the user's token, `GITHUB_UNAVAILABLE` otherwise.
+ * request that carried the user's token once `GET /user` confirms the token is rejected,
+ * `GITHUB_UNAVAILABLE` otherwise. An unconfirmed 401 is retried once, like a 5xx.
  * `err.githubReason` is one of `NETWORK`, `SERVER`, `CLIENT`, `REDIRECT`, `BLOCKED`, `TOO_LARGE`,
- * `TOKEN_REJECTED`.
+ * `TOKEN_REJECTED`, `TOKEN_UNCONFIRMED`.
  *
  * @param {{ maxZipBytes: number }} options
  * @param {{ request: Function }} [http] axios-compatible; injectable for tests
@@ -139,6 +141,23 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
     }
   }
 
+  /**
+   * A single 401 is not proof that the token is dead (GitHub occasionally answers 401 for a
+   * valid token). Asks `GET /user` with the same token: true only when that is also a 401.
+   * Any other outcome (2xx, 5xx, network error) is not a confirmation.
+   */
+  async function confirmTokenRejected(authorization) {
+    try {
+      const { res } = await attempt(USER_URL, {
+        timeout: API_TIMEOUT_MS,
+        headers: { Accept: 'application/vnd.github+json', Authorization: authorization },
+      });
+      return res.status === 401;
+    } catch {
+      return false;
+    }
+  }
+
   async function request(url, opts) {
     let lastReason = 'NETWORK';
     let lastStatus;
@@ -168,7 +187,13 @@ export function createGithubClient({ maxZipBytes }, http = axios) {
           "We couldn't find that repository on GitHub. Check the owner and name.",
         );
       }
-      if (res.status === 401 && sentToken) throw tokenRejected();
+      if (res.status === 401 && sentToken) {
+        if (await confirmTokenRejected(opts.headers.Authorization)) throw tokenRejected();
+        // Not confirmed: retry once, like a 5xx. An unconfirmed 401 never ends the session.
+        lastReason = 'TOKEN_UNCONFIRMED';
+        lastStatus = 401;
+        continue;
+      }
       throw unavailable('CLIENT', res.status);
     }
     throw unavailable(lastReason, lastStatus);
