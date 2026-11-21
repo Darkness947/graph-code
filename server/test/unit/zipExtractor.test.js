@@ -78,6 +78,13 @@ describe('extractArchive: limits (AC2)', () => {
     expect(result.skipped).toEqual([]);
   });
 
+  it('a high-ratio source file over MAX_FILE_BYTES is skipped as too_large (D-07)', async () => {
+    const zip = await buildZip({ 'a.js': 'x', 'big.js': Buffer.alloc(500_000, 0x20) });
+    const result = await extract(zip, { maxFileBytes: 100_000 });
+    expect(paths(result.files)).toEqual(['a.js']);
+    expect(result.skipped).toEqual([{ path: 'big.js', reason: 'too_large' }]);
+  });
+
   it('a ratio bomb in a root configuration file still aborts', async () => {
     const zip = await buildZip({ 'a.ts': 'x', 'tsconfig.json': Buffer.alloc(500_000, 0x20) });
     await expect(extract(zip)).rejects.toMatchObject({ code: 'ARCHIVE_LIMIT_EXCEEDED' });
