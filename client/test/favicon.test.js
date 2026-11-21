@@ -18,7 +18,9 @@ describe('browser-tab icon', () => {
     const accent = /--accent-blue:\s*(#[0-9a-f]{6})/i.exec(tokens)[1];
     expect(svg).toContain(`stroke="${accent}"`);
     expect(svg).toContain(`fill="${accent}"`);
-    for (const shape of svg.matchAll(/ (d|cx|cy|r)="([^"]+)"/g)) {
+    const shapes = [...svg.matchAll(/ (d|cx|cy|r)="([^"]+)"/g)];
+    expect(shapes).toHaveLength(10); // one path d + three circles × (cx, cy, r)
+    for (const shape of shapes) {
       expect(navBar).toContain(`${shape[1]}="${shape[2]}"`);
     }
   });

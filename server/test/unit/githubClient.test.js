@@ -312,11 +312,40 @@ describe('timeouts and retries (AC2, spec 7.4)', () => {
     ['a network error', new Error('socket hang up')],
     ['a 5xx', ok({}, 503)],
   ])('does not treat a 401 as rejected when GET /user fails with %s', async (_, failure) => {
-    const { client } = make(ok({}, 401), failure, ok({}, 401), failure);
+    const { client, request } = make(ok({}, 401), failure, ok({}, 401), failure);
     await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
       code: 'GITHUB_UNAVAILABLE',
       githubReason: 'TOKEN_UNCONFIRMED',
     });
+    // The probe is never retried on its own.
+    expect(request).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not confirm a 401 when the probe was redirected and lost the token', async () => {
+    const lostToken = [redirect('https://github.com/x'), ok({}, 401)];
+    const { client } = make(ok({}, 401), ...lostToken, ok({}, 401), ...lostToken);
+    await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
+      code: 'GITHUB_UNAVAILABLE',
+      githubReason: 'TOKEN_UNCONFIRMED',
+    });
+  });
+
+  it('confirms a rejection on the retry after a first unconfirmed 401', async () => {
+    const { client, request } = make(ok({}, 401), ok({ login: 'octo' }), ok({}, 401), ok({}, 401));
+    await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+      githubReason: 'TOKEN_REJECTED',
+    });
+    expect(request).toHaveBeenCalledTimes(4);
+  });
+
+  it('confirms a rejection on the retry after a 5xx (shared retry budget)', async () => {
+    const { client, request } = make(ok({}, 503), ok({}, 401), ok({}, 401));
+    await expect(client.getRepository('t', 'octo', 'hello')).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+      githubReason: 'TOKEN_REJECTED',
+    });
+    expect(request).toHaveBeenCalledTimes(3);
   });
 
   it('keeps a 401 on a request without a token as GITHUB_UNAVAILABLE, with no probe', async () => {
