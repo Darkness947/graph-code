@@ -558,6 +558,25 @@ h2 {
   justify-self: end;
 }
 
+.dash-load-error,
+.dash-no-match {
+  padding: 48px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.dash-load-error .bi {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 28px;
+  color: var(--danger);
+}
+
+.dash-load-error p {
+  margin-bottom: 16px;
+  font-size: var(--font-size-reading);
+}
+
 .repo-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

@@ -53,6 +53,13 @@ export function addErrorMessage(err) {
 
 export const GENERIC_ERROR = 'Something went wrong. Try again.';
 
+/** Message for a failed page load (repository list, graph): the 8.9 rate-limit text, else generic. */
+export const loadErrorMessage = (err) =>
+  err?.code === 'RATE_LIMITED' ? addErrorMessage(err) : GENERIC_ERROR;
+
+/** Dashboard filter with no matching card (wording follows the 8.6 search no-match message). */
+export const NO_FILTER_MATCH = (query) => `No repositories match '${query}'`;
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const pad = (n) => String(n).padStart(2, '0');
 

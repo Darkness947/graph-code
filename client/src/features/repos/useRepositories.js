@@ -48,7 +48,8 @@ export async function tryAddRepo(repo) {
  */
 export function useRepositories() {
   const [items, setItems] = useState(null);
-  const [error, setError] = useState(false);
+  /** The last list failure (an ApiError), or null. */
+  const [error, setError] = useState(null);
   const alive = useRef(true);
   // Counts local changes (add, retry, remove). A list fetched across a change is stale and dropped,
   // so a poll that left before it cannot undo it; the next poll brings the fresh list.
@@ -61,10 +62,10 @@ export function useRepositories() {
       if (!alive.current || mutations.current !== started) return;
       // Keep the same array when a poll brings nothing new, so the grid does not re-render.
       setItems((cur) => (JSON.stringify(cur) === JSON.stringify(data.items) ? cur : data.items));
-      setError(false);
+      setError(null);
     } catch (err) {
       if (!alive.current) return;
-      if (!handleUnauthenticated(err)) setError(true);
+      if (!handleUnauthenticated(err)) setError(err);
     }
   }, []);
 
