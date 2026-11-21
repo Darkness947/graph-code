@@ -287,6 +287,23 @@ function Canvas() {
     [selectFile, selectFolder],
   );
 
+  // Keyboard selection (Enter or Space on a focused node), the same as a click. Selection in
+  // React Flow is off, so its own key handling does nothing here. Keys on a control inside a node
+  // (a folder chevron) belong to that control.
+  const onCanvasKeyDown = useCallback(
+    (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const target = event.target;
+      if (!target.classList?.contains('react-flow__node')) return;
+      const node = useWorkspaceStore.getState().graph?.nodesById.get(target.dataset.id);
+      if (!node) return;
+      event.preventDefault();
+      if (node.type === 'file') selectFile(node.id);
+      else selectFolder(node.id);
+    },
+    [selectFile, selectFolder],
+  );
+
   const onNodeDoubleClick = useCallback(
     (_event, node) => {
       if (node.type === 'folder' && !node.data.expanded) expandFolder(node.data.path);
@@ -326,6 +343,7 @@ function Canvas() {
         elementsSelectable={false}
         zoomOnDoubleClick={false}
         onNodeClick={onNodeClick}
+        onKeyDown={onCanvasKeyDown}
         onNodeDoubleClick={onNodeDoubleClick}
         onEdgeClick={onEdgeClick}
         onNodeMouseEnter={onNodeMouseEnter}

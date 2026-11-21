@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAMPLE } from '../../../test/graphFixture.js';
@@ -56,6 +56,37 @@ describe('GraphCanvas', () => {
 
     await user.click(screen.getByRole('button', { name: 'Collapse folder src' }));
     expect(store().expandedFolders.has('src')).toBe(false);
+  });
+
+  it('selects a focused file or folder node with Enter or Space, like a click', async () => {
+    const user = userEvent.setup();
+    await renderCanvas();
+    const file = nodeEl('f:index.ts');
+    expect(file).toHaveAttribute('aria-label', 'File index.ts');
+    file.focus();
+    await user.keyboard('{Enter}');
+    expect(store().selectedNodeId).toBe('f:index.ts');
+
+    // Selecting a file enters focus mode, which hides unrelated folders; leave it first.
+    act(() => store().clearFocus());
+    const folder = await waitFor(() => {
+      const el = nodeEl('d:src');
+      expect(el).not.toBeNull();
+      return el;
+    });
+    expect(folder).toHaveAttribute('aria-label', 'Folder src, 3 files');
+    folder.focus();
+    await user.keyboard(' ');
+    expect(store().selectedNodeId).toBe('d:src');
+  });
+
+  it('leaves Enter on a folder chevron to the chevron (expands, does not select)', async () => {
+    const user = userEvent.setup();
+    await renderCanvas();
+    screen.getByRole('button', { name: 'Expand folder src' }).focus();
+    await user.keyboard('{Enter}');
+    expect(store().expandedFolders.has('src')).toBe(true);
+    expect(store().selectedNodeId).toBeNull();
   });
 
   it('expands a collapsed folder on double-click', async () => {

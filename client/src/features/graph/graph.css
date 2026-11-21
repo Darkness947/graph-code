@@ -932,6 +932,12 @@
   cursor: row-resize;
 }
 
+/* The global focus ring would be clipped to 6 px; draw a full-width bar instead. */
+.code-resize:focus-visible {
+  outline: none !important;
+  background: var(--accent-blue);
+}
+
 .code-header {
   display: flex;
   flex: none;

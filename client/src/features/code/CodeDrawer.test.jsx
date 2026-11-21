@@ -140,4 +140,26 @@ describe('CodeDrawer (spec 8.6)', () => {
     fireEvent(window, Object.assign(new Event('pointermove'), { clientY: 500 }));
     expect(store().codeDrawer.heightPct).toBe(20);
   });
+
+  it('resizes from the keyboard: focusable, arrow keys move 5 percent within 20 to 70', async () => {
+    act(() => store().openCode());
+    renderDrawer();
+    const user = userEvent.setup();
+    const grip = screen.getByRole('separator', { name: 'Resize code drawer' });
+    expect(grip).toHaveAttribute('aria-valuenow', '40');
+    expect(grip).toHaveAttribute('aria-valuemin', '20');
+    expect(grip).toHaveAttribute('aria-valuemax', '70');
+
+    grip.focus();
+    expect(grip).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(store().codeDrawer.heightPct).toBe(45);
+    expect(grip).toHaveAttribute('aria-valuenow', '45');
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(store().codeDrawer.heightPct).toBe(35);
+    for (let i = 0; i < 10; i++) await user.keyboard('{ArrowUp}');
+    expect(store().codeDrawer.heightPct).toBe(70);
+    for (let i = 0; i < 20; i++) await user.keyboard('{ArrowDown}');
+    expect(store().codeDrawer.heightPct).toBe(20);
+  });
 });
