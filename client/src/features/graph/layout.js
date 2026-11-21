@@ -1,4 +1,5 @@
 import dagre from '@dagrejs/dagre';
+import { countOf } from '../repos/messages.js';
 import { aggregateEdges } from './aggregation.js';
 import { centralityThresholds, centralityTier } from './centrality.js';
 import { buildVisibleAncestorMap, computeVisibleNodes } from './visibility.js';
@@ -166,7 +167,7 @@ export function layoutGraph(index, expandedFolders) {
       ariaLabel:
         v.kind === 'file'
           ? `File ${node.path}`
-          : `Folder ${node.path}, ${data.fileCount} ${data.fileCount === 1 ? 'file' : 'files'}`,
+          : `Folder ${node.path}, ${countOf(data.fileCount, 'file', 'files')}`,
       data,
     };
   });

@@ -13,13 +13,6 @@ export default function Dashboard() {
   const [modal, setModal] = useState(false);
   const [removing, setRemoving] = useState(null);
   const [filter, setFilter] = useState('');
-  const [reloading, setReloading] = useState(false);
-
-  const reload = async () => {
-    setReloading(true);
-    await refresh();
-    setReloading(false);
-  };
 
   const retry = async (repo) => {
     const { repository, error: failure } = await tryAddRepo(`${repo.owner}/${repo.name}`);
@@ -55,10 +48,11 @@ export default function Dashboard() {
         </div>
       )}
       {items === null && error && (
-        <div className="dash-load-error" role="alert">
-          <i className="bi bi-exclamation-circle" aria-hidden="true" />
+        // MessagePanel's look without its page-level <h1>: the page already has one.
+        <div className="message-panel dash-load-error" role="alert">
+          <i className="bi bi-exclamation-circle message-icon is-failure" aria-hidden="true" />
           <p>{loadErrorMessage(error)}</p>
-          <button type="button" className="btn btn-primary" onClick={reload} disabled={reloading}>
+          <button type="button" className="btn btn-primary" onClick={refresh}>
             Try again
           </button>
         </div>

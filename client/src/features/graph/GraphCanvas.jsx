@@ -279,13 +279,12 @@ function Canvas() {
     return () => document.removeEventListener('keydown', onKey);
   }, [clearFocus]);
 
-  const onNodeClick = useCallback(
-    (_event, node) => {
-      if (node.type === 'file') selectFile(node.id);
-      else selectFolder(node.id);
-    },
+  /** A click or Enter/Space on a node: a file enters focus mode, a folder shows its facts. */
+  const selectNode = useCallback(
+    (node) => (node.type === 'file' ? selectFile(node.id) : selectFolder(node.id)),
     [selectFile, selectFolder],
   );
+  const onNodeClick = useCallback((_event, node) => selectNode(node), [selectNode]);
 
   // Keyboard selection (Enter or Space on a focused node), the same as a click. Selection in
   // React Flow is off, so its own key handling does nothing here. Keys on a control inside a node
@@ -295,13 +294,12 @@ function Canvas() {
       if (event.key !== 'Enter' && event.key !== ' ') return;
       const target = event.target;
       if (!target.classList?.contains('react-flow__node')) return;
-      const node = useWorkspaceStore.getState().graph?.nodesById.get(target.dataset.id);
+      const node = graph.nodesById.get(target.dataset.id);
       if (!node) return;
       event.preventDefault();
-      if (node.type === 'file') selectFile(node.id);
-      else selectFolder(node.id);
+      selectNode(node);
     },
-    [selectFile, selectFolder],
+    [graph, selectNode],
   );
 
   const onNodeDoubleClick = useCallback(
