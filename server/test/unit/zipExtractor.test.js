@@ -67,7 +67,7 @@ describe('extractArchive: limits (AC2)', () => {
     await expect(extract(zip)).rejects.toMatchObject({ code: 'ARCHIVE_LIMIT_EXCEEDED' });
   });
 
-  it('a high-ratio entry the skip rules drop is ignored, never inflated (D-07)', async () => {
+  it('high-ratio entries the skip rules drop are ignored, never inflated (D-07)', async () => {
     const zip = await buildZip({
       'a.js': 'x',
       'assets/big.bin': Buffer.alloc(500_000),
