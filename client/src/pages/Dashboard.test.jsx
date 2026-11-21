@@ -237,6 +237,55 @@ describe('Dashboard (spec 8.5)', () => {
     expect(screen.getByRole('article', { name: 'acme/tools' })).toBeInTheDocument();
   });
 
+  it('shows a list load failure with Try again, which shows the spinner and loads again', async () => {
+    let calls = 0;
+    let answer;
+    mockApi({
+      me: USER,
+      routes: {
+        '/repos': () =>
+          ++calls === 1
+            ? apiErr(500, { code: 'INTERNAL' })
+            : new Promise((resolve) => (answer = resolve)),
+      },
+    });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText('Something went wrong. Try again.')).toBeInTheDocument();
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }));
+    // The spinner replaces the error while the retry is in flight.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    await act(async () => answer({ items: [repo()] }));
+    expect(await screen.findByRole('article', { name: 'vercel/next-learn' })).toBeInTheDocument();
+  });
+
+  it('shows the 8.9 rate-limit message when the list load is rate limited', async () => {
+    mockApi({
+      me: USER,
+      routes: { '/repos': () => apiErr(429, { code: 'RATE_LIMITED', retryAfterSeconds: 12 }) },
+    });
+    renderApp('/dashboard');
+
+    expect(
+      await screen.findByText("You're doing that too often. Try again in 12 seconds."),
+    ).toBeInTheDocument();
+  });
+
+  it('says so when the filter matches no repository', async () => {
+    mockApi({ me: USER, routes: reposRoute([repo()]) });
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    await screen.findByRole('article', { name: 'vercel/next-learn' });
+    await user.type(screen.getByRole('searchbox', { name: 'Filter repositories' }), ' zzz ');
+    expect(screen.getByRole('status')).toHaveTextContent("No repositories match 'zzz'");
+    await user.clear(screen.getByRole('searchbox', { name: 'Filter repositories' }));
+    expect(screen.queryByText(/No repositories match/)).not.toBeInTheDocument();
+  });
+
   it('sends the user home with the expired-session toast on a mid-session 401', async () => {
     mockApi({
       me: USER,

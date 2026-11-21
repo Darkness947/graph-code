@@ -96,6 +96,19 @@ describe('Workspace (spec 8.6)', () => {
     expect(vi.mocked(request)).toHaveBeenCalledWith('/repos/repo-1/graph');
   });
 
+  it('shows the 8.9 rate-limit message when the graph load is rate limited', async () => {
+    mockApi(
+      graphRoute(() =>
+        Promise.reject(new ApiError(429, { code: 'RATE_LIMITED', retryAfterSeconds: 30 })),
+      ),
+    );
+    renderApp('/repos/repo-1');
+    expect(
+      await screen.findByText("You're doing that too often. Try again in 30 seconds."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
   it('sends the user home when the session expired', async () => {
     mockApi(graphRoute(fail(401, 'UNAUTHENTICATED')));
     renderApp('/repos/repo-1');

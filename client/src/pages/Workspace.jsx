@@ -6,7 +6,7 @@ import PageSpinner from '../components/PageSpinner.jsx';
 import CodeDrawer from '../features/code/CodeDrawer.jsx';
 import GraphCanvas from '../features/graph/GraphCanvas.jsx';
 import InsightsPanel from '../features/insights/InsightsPanel.jsx';
-import { countOf, formatDate, GENERIC_ERROR } from '../features/repos/messages.js';
+import { countOf, formatDate, loadErrorMessage } from '../features/repos/messages.js';
 import { handleUnauthenticated } from '../features/repos/useRepositories.js';
 import { useWorkspaceStore } from '../store/workspaceStore.js';
 
@@ -103,7 +103,7 @@ export default function Workspace() {
         icon="bi-exclamation-circle"
         failure
         title="Couldn't load the graph"
-        text={GENERIC_ERROR}
+        text={loadErrorMessage(state.error)}
       >
         <button type="button" className="btn btn-primary" onClick={retry}>
           Try again

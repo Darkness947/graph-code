@@ -3,13 +3,13 @@ import AnalyzeModal from '../features/repos/AnalyzeModal.jsx';
 import EmptyState from '../features/repos/EmptyState.jsx';
 import RemoveRepoModal from '../features/repos/RemoveRepoModal.jsx';
 import RepoCard from '../features/repos/RepoCard.jsx';
-import { GENERIC_ERROR, REPO_REMOVED } from '../features/repos/messages.js';
+import { loadErrorMessage, NO_FILTER_MATCH, REPO_REMOVED } from '../features/repos/messages.js';
 import { tryAddRepo, useRepositories } from '../features/repos/useRepositories.js';
 import { showToast } from '../store/toastStore.js';
 
 /** Dashboard (spec 8.5). */
 export default function Dashboard() {
-  const { items, error, refresh, upsert, remove } = useRepositories();
+  const { items, error, refresh, reload, upsert, remove } = useRepositories();
   const [modal, setModal] = useState(false);
   const [removing, setRemoving] = useState(null);
   const [filter, setFilter] = useState('');
@@ -47,7 +47,16 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {items === null && error && <p role="alert">{GENERIC_ERROR}</p>}
+      {items === null && error && (
+        // MessagePanel's look without its page-level <h1>: the page already has one.
+        <div className="message-panel dash-load-error" role="alert">
+          <i className="bi bi-exclamation-circle message-icon is-failure" aria-hidden="true" />
+          <p>{loadErrorMessage(error)}</p>
+          <button type="button" className="btn btn-primary" onClick={reload}>
+            Try again
+          </button>
+        </div>
+      )}
       {items?.length === 0 && <EmptyState onAnalyze={() => setModal(true)} />}
       {items?.length > 0 && (
         <div className="repo-grid">
@@ -55,6 +64,11 @@ export default function Dashboard() {
             <RepoCard key={r.id} repo={r} onRetry={retry} onRemove={setRemoving} />
           ))}
         </div>
+      )}
+      {items?.length > 0 && shown.length === 0 && (
+        <p className="dash-no-match" role="status">
+          {NO_FILTER_MATCH(filter.trim())}
+        </p>
       )}
 
       <RemoveRepoModal

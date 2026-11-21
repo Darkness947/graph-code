@@ -117,6 +117,16 @@ function union(rects) {
  * Layout runs only when the graph or the expanded folders change; hover only filters which
  * detail edges are drawn (decision D-06) and never triggers it.
  */
+/**
+ * Screen-reader hint for a focused node. React Flow's default promises arrow-key moves and
+ * delete, which this read-only canvas does not offer.
+ */
+const NODE_HINT = 'Press enter or space to select this file or folder.';
+const ARIA_LABELS = {
+  'node.a11yDescription.default': NODE_HINT,
+  'node.a11yDescription.keyboardDisabled': NODE_HINT,
+};
+
 function Canvas() {
   const graph = useWorkspaceStore((s) => s.graph);
   const expandedFolders = useWorkspaceStore((s) => s.expandedFolders);
@@ -279,12 +289,27 @@ function Canvas() {
     return () => document.removeEventListener('keydown', onKey);
   }, [clearFocus]);
 
-  const onNodeClick = useCallback(
-    (_event, node) => {
-      if (node.type === 'file') selectFile(node.id);
-      else selectFolder(node.id);
-    },
+  /** A click or Enter/Space on a node: a file enters focus mode, a folder shows its facts. */
+  const selectNode = useCallback(
+    (node) => (node.type === 'file' ? selectFile(node.id) : selectFolder(node.id)),
     [selectFile, selectFolder],
+  );
+  const onNodeClick = useCallback((_event, node) => selectNode(node), [selectNode]);
+
+  // Keyboard selection (Enter or Space on a focused node), the same as a click. Selection in
+  // React Flow is off, so its own key handling does nothing here. Keys on a control inside a node
+  // (a folder chevron) belong to that control.
+  const onCanvasKeyDown = useCallback(
+    (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const target = event.target;
+      if (!target.classList?.contains('react-flow__node')) return;
+      const node = graph.nodesById.get(target.dataset.id);
+      if (!node) return;
+      event.preventDefault();
+      selectNode(node);
+    },
+    [graph, selectNode],
   );
 
   const onNodeDoubleClick = useCallback(
@@ -324,8 +349,12 @@ function Canvas() {
         nodeDragThreshold={4}
         nodesConnectable={false}
         elementsSelectable={false}
+        // Edges do nothing on Enter; the count badge is the keyboard control for expanding.
+        edgesFocusable={false}
+        ariaLabelConfig={ARIA_LABELS}
         zoomOnDoubleClick={false}
         onNodeClick={onNodeClick}
+        onKeyDown={onCanvasKeyDown}
         onNodeDoubleClick={onNodeDoubleClick}
         onEdgeClick={onEdgeClick}
         onNodeMouseEnter={onNodeMouseEnter}

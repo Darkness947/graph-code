@@ -1,9 +1,12 @@
 import { Highlight } from 'prism-react-renderer';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { getSource } from '../../api/repos.js';
-import { useWorkspaceStore } from '../../store/workspaceStore.js';
+import { MAX_DRAWER_PCT, MIN_DRAWER_PCT, useWorkspaceStore } from '../../store/workspaceStore.js';
 import { handleUnauthenticated } from '../repos/useRepositories.js';
 import { codeTheme, MAX_HIGHLIGHT_LINES, prismLanguage } from './codeLanguage.js';
+
+/** Percentage points per arrow-key press on the resize bar. */
+const RESIZE_STEP = 5;
 
 export const TOO_LARGE = 'This file is too large to display (over 1 MB).';
 export const LOAD_FAILED = "Couldn't load this file from GitHub.";
@@ -136,6 +139,14 @@ export default function CodeDrawer({ repoId, containerRef }) {
     window.addEventListener('pointerup', stop);
   };
 
+  // Keyboard resize: the arrow keys move the drawer edge 5% at a time; the store clamps it.
+  const resizeByKey = (event) => {
+    const step = { ArrowUp: RESIZE_STEP, ArrowDown: -RESIZE_STEP }[event.key];
+    if (step === undefined) return;
+    event.preventDefault();
+    setCodeHeight(heightPct + step);
+  };
+
   if (!open) {
     return (
       <div className="code-drawer is-closed">
@@ -153,7 +164,12 @@ export default function CodeDrawer({ repoId, containerRef }) {
         role="separator"
         aria-orientation="horizontal"
         aria-label="Resize code drawer"
+        aria-valuenow={Math.round(heightPct)}
+        aria-valuemin={MIN_DRAWER_PCT}
+        aria-valuemax={MAX_DRAWER_PCT}
+        tabIndex={0}
         onPointerDown={startResize}
+        onKeyDown={resizeByKey}
       />
       <header className="code-header">
         <span className="code-path">{file?.path ?? 'Code'}</span>

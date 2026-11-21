@@ -932,6 +932,11 @@
   cursor: row-resize;
 }
 
+/* Draw the global focus ring inside the 6 px bar, where the drawer does not clip it. */
+.code-resize:focus-visible {
+  outline-offset: -2px;
+}
+
 .code-header {
   display: flex;
   flex: none;

@@ -1,4 +1,5 @@
 import dagre from '@dagrejs/dagre';
+import { countOf } from '../repos/messages.js';
 import { aggregateEdges } from './aggregation.js';
 import { centralityThresholds, centralityTier } from './centrality.js';
 import { buildVisibleAncestorMap, computeVisibleNodes } from './visibility.js';
@@ -162,6 +163,11 @@ export function layoutGraph(index, expandedFolders) {
       // A node inside a folder can be dragged only within the folder's tray.
       ...(v.parentId ? { parentId: v.parentId, extent: 'parent' } : {}),
       ...size.get(v.id),
+      // Read by screen readers when the node has keyboard focus.
+      ariaLabel:
+        v.kind === 'file'
+          ? `File ${node.path}`
+          : `Folder ${node.path}, ${countOf(data.fileCount, 'file', 'files')}`,
       data,
     };
   });
