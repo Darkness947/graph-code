@@ -89,17 +89,19 @@ export async function extractArchive(buffer, { limits, registry }) {
 
     let entry;
     while ((entry = await nextEntry(zip)) !== null) {
-      // Also true for a non-empty entry that claims zero compressed bytes.
+      const path = repositoryPath(entry.fileName);
+      if (path === null) continue;
+      const kind = classifyPath(path, registry, configNames);
+      if (kind === 'skip') continue;
+      // Only kept entries are checked: a skipped entry is never inflated, so it cannot be a bomb
+      // (D-07; e.g. a committed node_modules). Also true for a non-empty entry that claims zero
+      // compressed bytes.
       if (entry.uncompressedSize > entry.compressedSize * limits.maxCompressionRatio) {
         throw new IngestionError(
           'ARCHIVE_LIMIT_EXCEEDED',
           `an entry's compression ratio is above ${limits.maxCompressionRatio}`,
         );
       }
-      const path = repositoryPath(entry.fileName);
-      if (path === null) continue;
-      const kind = classifyPath(path, registry, configNames);
-      if (kind === 'skip') continue;
       if (keptPaths.has(path)) {
         throw new IngestionError('ARCHIVE_INVALID', 'two entries have the same path');
       }

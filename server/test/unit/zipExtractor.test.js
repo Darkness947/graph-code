@@ -67,8 +67,19 @@ describe('extractArchive: limits (AC2)', () => {
     await expect(extract(zip)).rejects.toMatchObject({ code: 'ARCHIVE_LIMIT_EXCEEDED' });
   });
 
-  it('a ratio bomb in an entry the skip rules would drop still aborts', async () => {
-    const zip = await buildZip({ 'a.js': 'x', 'assets/big.bin': Buffer.alloc(500_000) });
+  it('a high-ratio entry the skip rules drop is ignored, never inflated (D-07)', async () => {
+    const zip = await buildZip({
+      'a.js': 'x',
+      'assets/big.bin': Buffer.alloc(500_000),
+      'server/node_modules/pkg/data.js': Buffer.alloc(500_000, 0x20),
+    });
+    const result = await extract(zip);
+    expect(paths(result.files)).toEqual(['a.js']);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('a ratio bomb in a root configuration file still aborts', async () => {
+    const zip = await buildZip({ 'a.ts': 'x', 'tsconfig.json': Buffer.alloc(500_000, 0x20) });
     await expect(extract(zip)).rejects.toMatchObject({ code: 'ARCHIVE_LIMIT_EXCEEDED' });
   });
 
