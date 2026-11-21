@@ -89,13 +89,6 @@ export async function extractArchive(buffer, { limits, registry }) {
 
     let entry;
     while ((entry = await nextEntry(zip)) !== null) {
-      // Also true for a non-empty entry that claims zero compressed bytes.
-      if (entry.uncompressedSize > entry.compressedSize * limits.maxCompressionRatio) {
-        throw new IngestionError(
-          'ARCHIVE_LIMIT_EXCEEDED',
-          `an entry's compression ratio is above ${limits.maxCompressionRatio}`,
-        );
-      }
       const path = repositoryPath(entry.fileName);
       if (path === null) continue;
       const kind = classifyPath(path, registry, configNames);
@@ -113,6 +106,14 @@ export async function extractArchive(buffer, { limits, registry }) {
         throw new IngestionError(
           'REPO_TOO_LARGE',
           `the repository has more than ${limits.maxSourceFiles} source files`,
+        );
+      }
+      // Only entries about to be inflated: skipped and too_large ones never are (D-07).
+      // Also catches a non-empty entry that claims zero compressed bytes.
+      if (entry.uncompressedSize > entry.compressedSize * limits.maxCompressionRatio) {
+        throw new IngestionError(
+          'ARCHIVE_LIMIT_EXCEEDED',
+          `an entry's compression ratio is above ${limits.maxCompressionRatio}`,
         );
       }
       const content = await inflate(zip, entry, limits.maxTotalSourceBytes - totalBytes);
