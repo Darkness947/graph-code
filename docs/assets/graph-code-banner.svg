@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="220" viewBox="0 0 880 220" fill="none">
+  <!-- README banner: the navbar mark with the wordmark, on the app's canvas colours (styles/tokens.css). -->
+  <rect x="0.5" y="0.5" width="879" height="219" rx="16" fill="#0d1117" stroke="#30363d" />
+  <g stroke="#30363d" stroke-width="1">
+    <path d="M640 40 720 90M720 90 800 50M720 90 700 170M700 170 820 160M610 150 700 170" />
+  </g>
+  <g fill="#161b22" stroke="#30363d">
+    <circle cx="640" cy="40" r="7" /><circle cx="800" cy="50" r="7" />
+    <circle cx="820" cy="160" r="7" /><circle cx="610" cy="150" r="7" />
+  </g>
+  <circle cx="720" cy="90" r="9" fill="#2f81f7" />
+  <circle cx="700" cy="170" r="8" fill="#161b22" stroke="#f85149" stroke-width="2" />
+  <g transform="translate(56 54) scale(5)">
+    <path d="M11 6.5v3.2M11 9.7 5.5 15M11 9.7 16.5 15" stroke="#2f81f7" stroke-width="1.5" />
+    <circle cx="11" cy="4.5" r="2.75" fill="#2f81f7" />
+    <circle cx="5" cy="16.5" r="2.75" stroke="#2f81f7" stroke-width="1.5" />
+    <circle cx="17" cy="16.5" r="2.75" stroke="#2f81f7" stroke-width="1.5" />
+  </g>
+  <text x="200" y="100" fill="#e6edf3" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="52" font-weight="700">Graph Code</text>
+  <text fill="#7d8590" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19">
+    <tspan x="202" y="138">See your codebase&#8217;s architecture.</tspan>
+    <tspan x="202" y="164">Predict what breaks before you change it.</tspan>
+  </text>
+</svg>
