@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +8,12 @@ describe('browser-tab icon', () => {
     expect(read('../index.html')).toContain(
       '<link rel="icon" type="image/svg+xml" href="/favicon.svg" />',
     );
+  });
+
+  it('the favicon is well-formed SVG (browsers drop a malformed icon silently)', () => {
+    const doc = new DOMParser().parseFromString(read('../public/favicon.svg'), 'image/svg+xml');
+    expect(doc.getElementsByTagName('parsererror')).toHaveLength(0);
+    expect(doc.documentElement.nodeName).toBe('svg');
   });
 
   it('the favicon draws the navbar mark in --accent-blue', () => {
