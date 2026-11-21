@@ -102,5 +102,11 @@ export function useRepositories() {
     setItems((cur) => (cur ?? []).filter((r) => r.id !== id));
   }, []);
 
-  return { items, error, refresh, upsert, remove };
+  /** A manual retry after a failed load: clears the error so the spinner shows meanwhile. */
+  const reload = useCallback(() => {
+    setError(null);
+    return refresh();
+  }, [refresh]);
+
+  return { items, error, refresh, reload, upsert, remove };
 }

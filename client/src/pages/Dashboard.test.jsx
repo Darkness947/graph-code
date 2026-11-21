@@ -237,13 +237,16 @@ describe('Dashboard (spec 8.5)', () => {
     expect(screen.getByRole('article', { name: 'acme/tools' })).toBeInTheDocument();
   });
 
-  it('shows a list load failure with Try again, which loads the list again', async () => {
+  it('shows a list load failure with Try again, which shows the spinner and loads again', async () => {
     let calls = 0;
+    let answer;
     mockApi({
       me: USER,
       routes: {
         '/repos': () =>
-          ++calls === 1 ? apiErr(500, { code: 'INTERNAL' }) : Promise.resolve({ items: [repo()] }),
+          ++calls === 1
+            ? apiErr(500, { code: 'INTERNAL' })
+            : new Promise((resolve) => (answer = resolve)),
       },
     });
     const user = userEvent.setup();
@@ -252,8 +255,11 @@ describe('Dashboard (spec 8.5)', () => {
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText('Something went wrong. Try again.')).toBeInTheDocument();
     await user.click(within(alert).getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('article', { name: 'vercel/next-learn' })).toBeInTheDocument();
+    // The spinner replaces the error while the retry is in flight.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    await act(async () => answer({ items: [repo()] }));
+    expect(await screen.findByRole('article', { name: 'vercel/next-learn' })).toBeInTheDocument();
   });
 
   it('shows the 8.9 rate-limit message when the list load is rate limited', async () => {

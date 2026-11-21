@@ -80,6 +80,17 @@ describe('GraphCanvas', () => {
     expect(store().selectedNodeId).toBe('d:src');
   });
 
+  it('keeps edges out of the tab order and gives nodes an accurate keyboard hint', async () => {
+    await renderCanvas(['src', 'src/lib']);
+    const edges = document.querySelectorAll('.react-flow__edge');
+    expect(edges.length).toBeGreaterThan(0);
+    for (const edge of edges) expect(edge).not.toHaveAttribute('tabindex', '0');
+    const describedBy = nodeEl('f:index.ts').getAttribute('aria-describedby');
+    expect(document.getElementById(describedBy)).toHaveTextContent(
+      'Press enter or space to select this file or folder.',
+    );
+  });
+
   it('leaves Enter on a folder chevron to the chevron (expands, does not select)', async () => {
     const user = userEvent.setup();
     await renderCanvas();

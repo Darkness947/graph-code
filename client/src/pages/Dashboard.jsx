@@ -9,7 +9,7 @@ import { showToast } from '../store/toastStore.js';
 
 /** Dashboard (spec 8.5). */
 export default function Dashboard() {
-  const { items, error, refresh, upsert, remove } = useRepositories();
+  const { items, error, refresh, reload, upsert, remove } = useRepositories();
   const [modal, setModal] = useState(false);
   const [removing, setRemoving] = useState(null);
   const [filter, setFilter] = useState('');
@@ -52,7 +52,7 @@ export default function Dashboard() {
         <div className="message-panel dash-load-error" role="alert">
           <i className="bi bi-exclamation-circle message-icon is-failure" aria-hidden="true" />
           <p>{loadErrorMessage(error)}</p>
-          <button type="button" className="btn btn-primary" onClick={refresh}>
+          <button type="button" className="btn btn-primary" onClick={reload}>
             Try again
           </button>
         </div>
